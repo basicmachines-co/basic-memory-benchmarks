@@ -9,6 +9,7 @@ __pycache__/
 benchmarks/runs/
 benchmarks/results/public/
 benchmarks/generated/
+benchmarks/logs/
 
 # Downloaded datasets (source distribution may be restricted)
 benchmarks/datasets/locomo/locomo10.json

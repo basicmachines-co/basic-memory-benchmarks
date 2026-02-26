@@ -2,7 +2,7 @@
 
 ## Providers
 
-- `bm-local`: Basic Memory local execution via external CLI/MCP contract
+- `bm-local`: Basic Memory local execution via warm `bm mcp` stdio session
 - `bm-cloud`: Optional cloud mode (credential gated)
 - `mem0-local`: Mem0 package execution in local environment
 - `zep-reference`: reference-only placeholder in v1

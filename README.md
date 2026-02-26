@@ -12,7 +12,7 @@ Standalone, reproducible benchmark suite for comparing Basic Memory against comp
 ## Current v1 Scope
 
 - Providers:
-  - `bm-local`
+  - `bm-local` (warm `bm mcp` stdio session)
   - `bm-cloud` (optional, credential-gated)
   - `mem0-local`
   - `zep-reference` (reference-only in v1)
@@ -95,6 +95,13 @@ export OPENAI_API_KEY=...
 
 If unavailable, provider status will be recorded as `SKIPPED(reason)`.
 
+## BM indexing readiness
+
+`bm-local` verifies index readiness before querying.
+
+- If the installed `bm` supports `bm status --json`, readiness is polled from that output.
+- If `--json` is not available in the installed `bm`, the benchmark proceeds after reindex.
+
 ## Run Artifacts
 
 Per run (`benchmarks/runs/<run-id>/`):
@@ -125,4 +132,3 @@ just bench-publish RUN_DIR=benchmarks/runs/<run-id>
 Dataset publication follows licensing constraints:
 - If redistribution is permitted: snapshot + checksum may be published.
 - If not: canonical source links + downloader + checksum verification are published.
-
