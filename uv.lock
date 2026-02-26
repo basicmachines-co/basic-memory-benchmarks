@@ -154,8 +154,8 @@ wheels = [
 
 [[package]]
 name = "basic-memory"
-version = "0.18.2.dev68+e46555bf"
-source = { git = "https://github.com/basicmachines-co/basic-memory?rev=main#e46555bf2cbcd9eadf58d036b0a67f6abab2b4e5" }
+version = "0.18.2.dev71+0a3f3f07"
+source = { git = "https://github.com/basicmachines-co/basic-memory?rev=main#0a3f3f07f8f7e1139f8aa509e1267fbdc808d5b3" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiosqlite" },
