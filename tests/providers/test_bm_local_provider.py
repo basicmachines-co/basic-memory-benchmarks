@@ -12,3 +12,11 @@ def test_extract_existing_project_name_from_bm_error() -> None:
 def test_extract_existing_project_name_none_without_match() -> None:
     message = "Error adding project: unknown failure"
     assert BasicMemoryLocalProvider._extract_existing_project_name(message) is None
+
+
+def test_extract_existing_project_name_from_wrapped_bm_error() -> None:
+    message = (
+        "Error adding project: path is nested within existing project \n"
+        "'bm-bench-wrap999' at '/tmp/docs'."
+    )
+    assert BasicMemoryLocalProvider._extract_existing_project_name(message) == "bm-bench-wrap999"

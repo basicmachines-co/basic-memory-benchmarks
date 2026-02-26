@@ -26,7 +26,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
 
     @staticmethod
     def _extract_existing_project_name(message: str) -> str | None:
-        match = re.search(r"existing project '([^']+)'", message)
+        match = re.search(r"existing project\s+'([^']+)'", message, flags=re.IGNORECASE)
         if match:
             return match.group(1)
         return None
