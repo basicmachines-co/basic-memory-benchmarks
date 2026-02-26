@@ -1,0 +1,153 @@
+"""Core benchmark models and artifact schemas."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+
+PROVIDER_STATE = Literal["ok", "skipped", "error"]
+
+
+class DatasetProvenance(BaseModel):
+    dataset_id: str
+    source_url: str
+    checksum_sha256: str
+    license_note: str
+    fetched_at_utc: str
+
+
+class QueryCase(BaseModel):
+    id: str
+    query: str
+    category: str
+    category_id: int | None = None
+    ground_truth: list[str] = Field(default_factory=list)
+    expected_answer: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SearchHit(BaseModel):
+    id: str | None = None
+    source_doc_id: str | None = None
+    source_path: str | None = None
+    text: str | None = None
+    score: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RetrievalMetrics(BaseModel):
+    recall_at_5: float = 0.0
+    recall_at_10: float = 0.0
+    precision_at_5: float = 0.0
+    mrr: float = 0.0
+    content_hit_rate: float = 0.0
+    mean_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
+    query_count: int = 0
+
+
+class PerQueryRetrievalResult(BaseModel):
+    provider: str
+    query_id: str
+    query_text: str
+    category: str
+    category_id: int | None = None
+    ground_truth: list[str] = Field(default_factory=list)
+    expected_answer: str | None = None
+    hits: list[SearchHit] = Field(default_factory=list)
+    recall_at_5: float
+    recall_at_10: float
+    precision_at_5: float
+    mrr: float
+    content_hit: bool
+    latency_ms: float
+    top_hit_doc_id: str | None = None
+    retrieved_context: str = ""
+
+
+class RetrievalSummary(BaseModel):
+    provider: str
+    metrics: RetrievalMetrics
+    by_category: dict[str, RetrievalMetrics] = Field(default_factory=dict)
+    official_headline: RetrievalMetrics
+    adversarial_breakout: RetrievalMetrics
+
+
+class JudgeCaseResult(BaseModel):
+    provider: str
+    query_id: str
+    category: str
+    passed: bool
+    score: float
+    reason: str
+    evaluator: str
+
+
+class JudgeSummary(BaseModel):
+    provider: str
+    evaluator: str
+    model: str
+    total_cases: int
+    pass_count: int
+    accuracy: float
+    skipped_reason: str | None = None
+
+
+class ProviderStatus(BaseModel):
+    provider: str
+    state: PROVIDER_STATE
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeInfo(BaseModel):
+    os: str
+    python_version: str
+    started_at_utc: str
+
+
+class RunConfig(BaseModel):
+    run_id: str
+    dataset_id: str
+    dataset_path: str
+    corpus_dir: str
+    queries_path: str
+    output_root: str = "benchmarks/runs"
+    providers: list[str] = Field(default_factory=list)
+    top_k: int = 10
+    bm_source: str = "github:basicmachines-co/basic-memory@main"
+    bm_local_path: str | None = None
+    judge_enabled: bool = False
+    judge_model: str = "gpt-4o-mini"
+    allow_provider_skip: bool = True
+
+
+class RunManifest(BaseModel):
+    run_id: str
+    created_at_utc: str
+    benchmark_git_sha: str
+    bm_source: str
+    bm_resolved_sha: str | None = None
+    bm_local_path: str | None = None
+    mem0_version: str | None = None
+    provider_versions: dict[str, dict[str, str]] = Field(default_factory=dict)
+    dataset: DatasetProvenance
+    runtime: RuntimeInfo
+    config: RunConfig
+
+
+class RunArtifacts(BaseModel):
+    manifest: RunManifest
+    provider_status: list[ProviderStatus]
+    retrieval_summaries: list[RetrievalSummary]
+    retrieval_rows: list[PerQueryRetrievalResult]
+    judge_summaries: list[JudgeSummary] = Field(default_factory=list)
+    judge_rows: list[JudgeCaseResult] = Field(default_factory=list)
+    fairness_warnings: list[str] = Field(default_factory=list)
+
+
+def now_utc() -> str:
+    return datetime.utcnow().isoformat() + "Z"

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Generated benchmark outputs
+benchmarks/runs/
+benchmarks/results/public/
+benchmarks/generated/
+
+# Downloaded datasets (source distribution may be restricted)
+benchmarks/datasets/locomo/locomo10.json
+benchmarks/datasets/locomo/locomo10.provenance.json
