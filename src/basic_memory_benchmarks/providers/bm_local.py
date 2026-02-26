@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, cast
@@ -15,8 +16,20 @@ from basic_memory_benchmarks.utils import run_command
 class BasicMemoryLocalProvider(BenchmarkProvider):
     name = "bm-local"
 
+    def __init__(self) -> None:
+        self._resolved_project_name: str | None = None
+
     def _project_name(self, run_config: RunConfig) -> str:
+        if self._resolved_project_name is not None:
+            return self._resolved_project_name
         return f"bm-bench-{run_config.run_id}"
+
+    @staticmethod
+    def _extract_existing_project_name(message: str) -> str | None:
+        match = re.search(r"existing project '([^']+)'", message)
+        if match:
+            return match.group(1)
+        return None
 
     def ingest(self, corpus_path: Path, run_config: RunConfig) -> None:
         project_name = self._project_name(run_config)
@@ -29,8 +42,16 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
             run_command(add_args)
         except subprocess.CalledProcessError as exc:
             merged = (exc.stdout or "") + "\n" + (exc.stderr or "")
-            if "already exists" not in merged.lower():
-                raise
+            merged_lower = merged.lower()
+            if "already exists" in merged_lower:
+                pass
+            else:
+                existing = self._extract_existing_project_name(merged)
+                if existing is None:
+                    raise
+                project_name = existing
+
+        self._resolved_project_name = project_name
 
         try:
             run_command(["bm", "reindex", "--search", "--embeddings", "-p", project_name])

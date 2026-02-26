@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.idea/
 
 # Generated benchmark outputs
 benchmarks/runs/
@@ -12,3 +13,4 @@ benchmarks/generated/
 # Downloaded datasets (source distribution may be restricted)
 benchmarks/datasets/locomo/locomo10.json
 benchmarks/datasets/locomo/locomo10.provenance.json
+.env
