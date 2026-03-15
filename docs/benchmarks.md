@@ -42,8 +42,8 @@ It covers:
 
 ### Repositories and paths
 
-- benchmark repo: `/Users/phernandez/dev/basicmachines/basic-memory-benchmarks`
-- BM local repo (default in `justfile`): `/Users/phernandez/dev/basicmachines/basic-memory`
+- benchmark repo: clone of `basicmachines-co/basic-memory-benchmarks`
+- BM local repo: set `BM_LOCAL_PATH` env var (or in `.env`) to your local `basic-memory` checkout
 
 ### Environment
 
@@ -53,7 +53,7 @@ It covers:
 ### One-time setup
 
 ```bash
-cd /Users/phernandez/dev/basicmachines/basic-memory-benchmarks
+cd /path/to/basic-memory-benchmarks
 just sync
 ```
 
@@ -107,7 +107,7 @@ Top-level commands:
 ### One-command full retrieval run
 
 ```bash
-cd /Users/phernandez/dev/basicmachines/basic-memory-benchmarks
+cd /path/to/basic-memory-benchmarks
 just bench-full
 ```
 
@@ -119,7 +119,7 @@ This runs:
 ### One-command full retrieval + judge
 
 ```bash
-cd /Users/phernandez/dev/basicmachines/basic-memory-benchmarks
+cd /path/to/basic-memory-benchmarks
 just bench-full-judge
 ```
 
@@ -235,8 +235,8 @@ Use this workflow today to compare BM revisions while keeping benchmark tooling 
 ### Step 1: Create BM worktrees for target refs
 
 ```bash
-BM_REPO=/Users/phernandez/dev/basicmachines/basic-memory
-WT_ROOT=/Users/phernandez/dev/basicmachines/basic-memory-benchmarks/benchmarks/worktrees/basic-memory
+BM_REPO=/path/to/basic-memory
+WT_ROOT=/path/to/basic-memory-benchmarks/benchmarks/worktrees/basic-memory
 
 mkdir -p "$WT_ROOT"
 
@@ -250,7 +250,7 @@ git -C "$BM_REPO" worktree add "$WT_ROOT/current" HEAD
 ### Step 2: Prepare benchmark datasets once
 
 ```bash
-cd /Users/phernandez/dev/basicmachines/basic-memory-benchmarks
+cd /path/to/basic-memory-benchmarks
 just sync
 just bench-prepare-short
 just bench-prepare-long
@@ -377,7 +377,7 @@ Planned command shape:
 
 ```bash
 uv run bm-bench run revision-matrix \
-  --bm-repo-path /Users/phernandez/dev/basicmachines/basic-memory \
+  --bm-repo-path /path/to/basic-memory \
   --revisions pre_fusion=f5a0e942^ \
   --revisions fusion=f5a0e942 \
   --revisions context_step1=f9b2a075 \

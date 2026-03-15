@@ -4,7 +4,8 @@ set dotenv-load := true
 
 # --- Paths and defaults ---
 
-bm_local_path := "/Users/phernandez/dev/basicmachines/basic-memory"
+bm_local_path := env_var_or_default("BM_LOCAL_PATH", "")
+bm_local_path_flag := if bm_local_path != "" { "--bm-local-path " + bm_local_path } else { "" }
 locomo_dataset_path := "benchmarks/datasets/locomo/locomo10.json"
 locomo_output_dir := "benchmarks/generated/locomo"
 locomo_c1_output_dir := "benchmarks/generated/locomo-c1"
@@ -84,7 +85,7 @@ bench-run-short:
       --corpus-dir benchmarks/generated/locomo-c1/docs \
       --queries-path benchmarks/generated/locomo-c1/queries.quick25.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --allow-provider-skip
 
 bench-run-short-strict:
@@ -94,7 +95,7 @@ bench-run-short-strict:
       --corpus-dir benchmarks/generated/locomo-c1/docs \
       --queries-path benchmarks/generated/locomo-c1/queries.quick25.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --strict-providers
 
 # Long benchmark: full LoCoMo query set
@@ -105,7 +106,7 @@ bench-run-long:
       --corpus-dir benchmarks/generated/locomo/docs \
       --queries-path benchmarks/generated/locomo/queries.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --allow-provider-skip
 
 bench-run-long-strict:
@@ -115,7 +116,7 @@ bench-run-long-strict:
       --corpus-dir benchmarks/generated/locomo/docs \
       --queries-path benchmarks/generated/locomo/queries.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --strict-providers
 
 bench-run-bm-local:
@@ -125,7 +126,7 @@ bench-run-bm-local:
       --dataset-path {{locomo_dataset_path}} \
       --corpus-dir benchmarks/generated/locomo/docs \
       --queries-path benchmarks/generated/locomo/queries.json \
-      --bm-local-path {{bm_local_path}}
+      {{bm_local_path_flag}}
 
 bench-run-mem0-local:
     uv run bm-bench run retrieval \
@@ -143,7 +144,7 @@ bench-run-full:
       --corpus-dir benchmarks/generated/locomo/docs \
       --queries-path benchmarks/generated/locomo/queries.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --allow-provider-skip
 
 bench-run-full-judge model="gpt-4o-mini":
@@ -153,7 +154,7 @@ bench-run-full-judge model="gpt-4o-mini":
       --corpus-dir benchmarks/generated/locomo/docs \
       --queries-path benchmarks/generated/locomo/queries.json \
       --providers bm-local,mem0-local \
-      --bm-local-path {{bm_local_path}} \
+      {{bm_local_path_flag}} \
       --allow-provider-skip \
       --judge \
       --judge-model "{{model}}"
