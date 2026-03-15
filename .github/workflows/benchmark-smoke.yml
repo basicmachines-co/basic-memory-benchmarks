@@ -12,6 +12,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
+      - uses: extractions/setup-just@v2
+
       - name: Install dependencies
         run: uv sync --group dev
 

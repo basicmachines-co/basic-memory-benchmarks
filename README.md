@@ -80,7 +80,7 @@ Local override:
 
 ```bash
 uv run bm-bench run retrieval \
-  --bm-local-path /Users/phernandez/dev/basicmachines/basic-memory
+  --bm-local-path /path/to/basic-memory
 ```
 
 ## Mem0 local requirements
