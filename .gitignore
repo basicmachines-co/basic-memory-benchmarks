@@ -15,3 +15,4 @@ benchmarks/logs/
 benchmarks/datasets/locomo/locomo10.json
 benchmarks/datasets/locomo/locomo10.provenance.json
 .env
+benchmarks/bm-home/
