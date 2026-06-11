@@ -94,7 +94,9 @@ class Mem0LocalProvider(BenchmarkProvider):
     def search(self, query: str, limit: int, run_config: RunConfig) -> list[SearchHit]:
         memory = self._ensure_memory()
         user_id = self._user_id(run_config)
-        payload = memory.search(query=query, user_id=user_id, limit=limit)
+        # mem0ai 2.0: entity scoping moved from top-level user_id= to filters=,
+        # and limit= became top_k=.
+        payload = memory.search(query=query, top_k=limit, filters={"user_id": user_id})
         rows = payload.get("results") if isinstance(payload, dict) else []
 
         hits: list[SearchHit] = []
