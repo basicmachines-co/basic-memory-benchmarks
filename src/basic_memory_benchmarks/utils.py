@@ -26,8 +26,13 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def run_command(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(args, cwd=cwd, text=True, capture_output=True, check=check)
+def run_command(
+    args: list[str],
+    cwd: Path | None = None,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    return subprocess.run(args, cwd=cwd, text=True, capture_output=True, check=check, env=env)
 
 
 def git_sha(path: Path) -> str | None:

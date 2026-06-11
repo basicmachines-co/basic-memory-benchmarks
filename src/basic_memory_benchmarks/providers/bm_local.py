@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import subprocess
 import threading
@@ -37,11 +38,13 @@ class _WarmMcpClient:
         *,
         command: str = "bm",
         args: list[str] | None = None,
+        env: dict[str, str] | None = None,
         startup_timeout_seconds: float = 30.0,
         request_timeout_seconds: float = 60.0,
     ) -> None:
         self._command = command
         self._args = args or ["mcp"]
+        self._env = env
         self._startup_timeout_seconds = startup_timeout_seconds
         self._request_timeout_seconds = request_timeout_seconds
         self._requests: Queue[_McpToolRequest | None] = Queue()
@@ -50,7 +53,7 @@ class _WarmMcpClient:
         self._thread: threading.Thread | None = None
 
     async def _serve(self) -> None:
-        params = StdioServerParameters(command=self._command, args=self._args)
+        params = StdioServerParameters(command=self._command, args=self._args, env=self._env)
         async with stdio_client(params) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
@@ -120,6 +123,20 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
         self._status_json_supported: bool | None = None
         self._mcp: _WarmMcpClient | None = None
         self._bm_command_prefix: list[str] = ["bm"]
+        self._bm_env: dict[str, str] | None = None
+
+    @staticmethod
+    def _isolated_bm_env() -> dict[str, str]:
+        # The benchmark must not depend on (or mutate) the operator's personal
+        # Basic Memory config — e.g. a cloud-mode setup would route search_notes
+        # through cloud.basicmemory.com. BASIC_MEMORY_CONFIG_DIR scopes config,
+        # database, and project registry to a benchmark-owned directory.
+        bm_home = Path("benchmarks/bm-home").resolve()
+        bm_home.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env.pop("BASIC_MEMORY_CLOUD_MODE", None)
+        env["BASIC_MEMORY_CONFIG_DIR"] = str(bm_home)
+        return env
 
     def _project_name(self, run_config: RunConfig) -> str:
         if self._resolved_project_name is not None:
@@ -141,7 +158,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
         *,
         check: bool = True,
     ) -> subprocess.CompletedProcess:
-        return run_command(self._bm_command_prefix + args, check=check)
+        return run_command(self._bm_command_prefix + args, check=check, env=self._bm_env)
 
     @staticmethod
     def _extract_existing_project_name(message: str) -> str | None:
@@ -259,6 +276,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
 
     def ingest(self, corpus_path: Path, run_config: RunConfig) -> None:
         self._bm_command_prefix = self._resolve_bm_command_prefix(run_config)
+        self._bm_env = self._isolated_bm_env()
         self._status_json_supported = None
         project_name = self._project_name(run_config)
 
@@ -290,7 +308,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
 
         mcp_command = self._bm_command_prefix[0]
         mcp_args = self._bm_command_prefix[1:] + ["mcp"]
-        self._mcp = _WarmMcpClient(command=mcp_command, args=mcp_args)
+        self._mcp = _WarmMcpClient(command=mcp_command, args=mcp_args, env=self._bm_env)
         self._mcp.start()
 
     @staticmethod
