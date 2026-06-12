@@ -170,8 +170,9 @@ def _score_case(
     judge: LLMRunner,
 ) -> QACaseResult:
     question = _question_display(row)
+    answer_prompt = build_answer_prompt(question, _row_context(row))
     try:
-        answer_result = answerer.complete(build_answer_prompt(question, _row_context(row)))
+        answer_result = answerer.complete(answer_prompt)
         judge_result = judge.complete(
             build_judge_prompt(question, row.expected_answer or "", answer_result.text)
         )
@@ -191,6 +192,7 @@ def _score_case(
             answer_latency_ms=answer_result.latency_ms,
             answer_input_tokens=answer_result.input_tokens,
             answer_output_tokens=answer_result.output_tokens,
+            answer_prompt_chars=len(answer_prompt),
         )
     except (LLMRunnerError, ValueError, json.JSONDecodeError) as exc:
         return QACaseResult(
@@ -208,6 +210,7 @@ def _score_case(
             answer_latency_ms=0.0,
             answer_input_tokens=0,
             answer_output_tokens=0,
+            answer_prompt_chars=len(answer_prompt),
             error=str(exc),
         )
 
@@ -265,5 +268,8 @@ def run_qa(
         ),
         total_answer_input_tokens=sum(case.answer_input_tokens for case in case_results),
         total_answer_output_tokens=sum(case.answer_output_tokens for case in case_results),
+        mean_answer_prompt_chars=(
+            sum(case.answer_prompt_chars for case in case_results) / len(case_results)
+        ),
     )
     return case_results, summary

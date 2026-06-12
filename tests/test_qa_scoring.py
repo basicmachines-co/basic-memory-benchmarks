@@ -302,3 +302,13 @@ class TestAssembleContext:
         judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
         run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
         assert "legacy joined context" in answerer.prompts[0]
+
+
+class TestPromptCharsAccounting:
+    def test_prompt_chars_recorded(self):
+        rows = [_row("q1", "Q1?", "A1", "some retrieved context here")]
+        answerer = FakeRunner({}, default="answer")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+        cases, summary = run_qa(rows, provider="bm-local", answerer=answerer, judge=judge)
+        assert cases[0].answer_prompt_chars == len(answerer.prompts[0])
+        assert summary.mean_answer_prompt_chars == cases[0].answer_prompt_chars
