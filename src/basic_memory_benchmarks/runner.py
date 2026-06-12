@@ -113,6 +113,7 @@ def _execute_provider_grouped(
 
     provider_rows: list[PerQueryRetrievalResult] = []
     failed_groups: list[str] = []
+    failed_group_errors: dict[str, str] = {}
     last_provider: BenchmarkProvider | None = None
     shared_provider = provider_factory(provider_name)
     reuse = shared_provider.supports_group_reuse
@@ -150,8 +151,12 @@ def _execute_provider_grouped(
                 if group_index == 0:
                     raise
                 failed_groups.append(group_id)
-            except Exception:
+            except Exception as exc:
                 failed_groups.append(group_id)
+                # Keep the first few error messages: a silent failed-group
+                # list is undiagnosable after a multi-hour run.
+                if len(failed_group_errors) < 3:
+                    failed_group_errors[group_id] = f"{type(exc).__name__}: {exc}"[:300]
     finally:
         if reuse:
             try:
@@ -170,6 +175,8 @@ def _execute_provider_grouped(
     if failed_groups:
         group_metadata["failed_group_count"] = str(len(failed_groups))
         group_metadata["failed_groups"] = ",".join(sorted(failed_groups)[:50])
+        for index, (group_id, message) in enumerate(sorted(failed_group_errors.items())):
+            group_metadata[f"failed_group_error_{index}"] = f"{group_id}: {message}"
     return provider_rows, last_provider, group_metadata
 
 
