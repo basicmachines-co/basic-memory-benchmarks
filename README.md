@@ -161,15 +161,28 @@ uv run bm-bench run retrieval \
 
 ## Mem0 local requirements
 
-`mem0-local` requires model credentials available in environment.
+`mem0-local` needs a model backend, picked in priority order:
 
-At minimum, set:
+**1. Local OpenAI-compatible endpoint (zero API spend, e.g. Ollama):**
 
 ```bash
-export OPENAI_API_KEY=...
+export MEM0_OPENAI_COMPAT_BASE_URL=http://localhost:11434/v1
+# optional overrides (defaults shown):
+# MEM0_LLM_MODEL=qwen2.5:3b  MEM0_EMBED_MODEL=nomic-embed-text  MEM0_EMBED_DIMS=768
+# MEM0_OPENAI_COMPAT_API_KEY=local  MEM0_QDRANT_PATH=benchmarks/.mem0-qdrant
 ```
 
-If unavailable, provider status will be recorded as `SKIPPED(reason)`.
+LLM and embeddings both route to the endpoint; the qdrant store is created
+per-run with matching dimensions under `MEM0_QDRANT_PATH`.
+
+**2. OpenAI (mem0's defaults):** `export OPENAI_API_KEY=...`
+
+With neither set, provider status is recorded as `SKIPPED(reason)`.
+
+`MEM0_INFER=true` enables mem0's LLM fact-extraction at ingest (its
+recommended/headline mode); default is `false` (raw add), which matches the
+existing baselines. The active backend, models, and infer mode are recorded in
+the run manifest's provider metadata.
 
 ## BM indexing readiness
 
