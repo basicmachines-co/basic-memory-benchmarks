@@ -120,6 +120,11 @@ class QACaseResult(BaseModel):
     answer_latency_ms: float
     answer_input_tokens: int
     answer_output_tokens: int
+    # Size of the assembled prompt actually sent to the answerer. Runner
+    # token accounting is transport-dependent (the claude CLI buries the
+    # prompt in cache-creation alongside its own system overhead), so chars
+    # are the comparable cross-provider context-size measure.
+    answer_prompt_chars: int = 0
     error: str | None = None
 
 
@@ -136,6 +141,7 @@ class QASummary(BaseModel):
     mean_answer_latency_ms: float = 0.0
     total_answer_input_tokens: int = 0
     total_answer_output_tokens: int = 0
+    mean_answer_prompt_chars: float = 0.0
     skipped_reason: str | None = None
 
 
