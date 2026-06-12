@@ -14,6 +14,8 @@ ingested by a provider distinguishes evidence from filler.
 from __future__ import annotations
 
 import json
+import random
+from collections import defaultdict
 from pathlib import Path
 
 from basic_memory_benchmarks.datasets.longmemeval import load_longmemeval_dataset
@@ -53,14 +55,43 @@ def convert_longmemeval_to_corpus(
     dataset_path: Path,
     output_dir: Path,
     max_questions: int | None = None,
+    stratified: bool = False,
+    seed: int = 42,
 ) -> tuple[Path, Path, int, int]:
     """Convert LongMemEval-S into per-question corpora + query manifest.
+
+    ``max_questions`` with ``stratified=False`` takes the file-order prefix
+    (the file is sorted by question type, so small prefixes are single-type —
+    fine for smoke tests, misleading for category comparisons).
+    ``stratified=True`` samples evenly across the six question types with a
+    fixed seed and records the composition in sampling.json.
 
     Returns:
         groups_dir, queries_path, doc_count, query_count
     """
     entries = load_longmemeval_dataset(dataset_path)
-    if max_questions is not None:
+    sampling_note: dict | None = None
+    if max_questions is not None and stratified:
+        by_type: dict[str, list[dict]] = defaultdict(list)
+        for entry in entries:
+            by_type[str(entry["question_type"])].append(entry)
+        rng = random.Random(seed)
+        per_type = max(1, max_questions // len(by_type))
+        sampled: list[dict] = []
+        composition: dict[str, int] = {}
+        for question_type, members in sorted(by_type.items()):
+            members.sort(key=lambda e: str(e["question_id"]))
+            take = min(per_type, len(members))
+            sampled.extend(rng.sample(members, take))
+            composition[question_type] = take
+        entries = sampled
+        sampling_note = {
+            "seed": seed,
+            "max_questions": max_questions,
+            "per_type": per_type,
+            "composition": composition,
+        }
+    elif max_questions is not None:
         entries = entries[:max_questions]
 
     groups_dir = output_dir / "groups"
@@ -130,5 +161,9 @@ def convert_longmemeval_to_corpus(
 
     queries_path = output_dir / "queries.json"
     queries_path.write_text(json.dumps(all_queries, indent=2), encoding="utf-8")
+    if sampling_note is not None:
+        (output_dir / "sampling.json").write_text(
+            json.dumps(sampling_note, indent=2), encoding="utf-8"
+        )
 
     return groups_dir, queries_path, doc_count, len(all_queries)

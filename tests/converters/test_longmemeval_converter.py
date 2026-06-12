@@ -130,3 +130,53 @@ class TestConvertLongMemEval:
             dataset_path=dataset, output_dir=tmp_path / "out", max_questions=2
         )
         assert query_count == 2
+
+
+class TestStratifiedSlice:
+    def test_stratified_covers_types_evenly(self, tmp_path):
+        entries = []
+        for t in ["single-session-user", "multi-session", "temporal-reasoning"]:
+            for i in range(10):
+                entries.append(_entry(f"{t[:4]}{i}", question_type=t))
+        dataset = _write_dataset(tmp_path, entries)
+
+        _, queries_path, _, count = convert_longmemeval_to_corpus(
+            dataset_path=dataset,
+            output_dir=tmp_path / "out",
+            max_questions=9,
+            stratified=True,
+        )
+
+        import collections
+
+        queries = json.loads(queries_path.read_text())
+        by_type = collections.Counter(q["category"] for q in queries)
+        assert count == 9
+        assert all(v == 3 for v in by_type.values())
+        sampling = json.loads((tmp_path / "out" / "sampling.json").read_text())
+        assert sampling["seed"] == 42
+
+    def test_stratified_deterministic(self, tmp_path):
+        entries = [_entry(f"q{i}", question_type="multi-session") for i in range(20)]
+        dataset = _write_dataset(tmp_path, entries)
+        ids = []
+        for run in range(2):
+            _, qp, _, _ = convert_longmemeval_to_corpus(
+                dataset_path=dataset,
+                output_dir=tmp_path / f"out{run}",
+                max_questions=5,
+                stratified=True,
+            )
+            ids.append([q["id"] for q in json.loads(qp.read_text())])
+        assert ids[0] == ids[1]
+
+    def test_prefix_mode_unchanged(self, tmp_path):
+        entries = [_entry(f"q{i}") for i in range(5)]
+        dataset = _write_dataset(tmp_path, entries)
+        _, qp, _, count = convert_longmemeval_to_corpus(
+            dataset_path=dataset,
+            output_dir=tmp_path / "out",
+            max_questions=2,
+        )
+        assert count == 2
+        assert [q["id"] for q in json.loads(qp.read_text())] == ["q0", "q1"]
