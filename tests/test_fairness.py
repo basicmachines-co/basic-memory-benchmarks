@@ -22,16 +22,20 @@ def _row(provider: str, query_id: str) -> PerQueryRetrievalResult:
 
 
 def test_validate_fairness_ok() -> None:
-    warnings = validate_fairness({
-        "a": [_row("a", "q1")],
-        "b": [_row("b", "q1")],
-    })
+    warnings = validate_fairness(
+        {
+            "a": [_row("a", "q1")],
+            "b": [_row("b", "q1")],
+        }
+    )
     assert warnings == []
 
 
 def test_validate_fairness_mismatch() -> None:
-    warnings = validate_fairness({
-        "a": [_row("a", "q1")],
-        "b": [_row("b", "q2")],
-    })
+    warnings = validate_fairness(
+        {
+            "a": [_row("a", "q1")],
+            "b": [_row("b", "q2")],
+        }
+    )
     assert len(warnings) == 1

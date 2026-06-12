@@ -265,7 +265,9 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
                 ]
             )
             payload = json.loads(completed.stdout.strip() or "{}")
-            if isinstance(payload, dict) and self._status_json_is_ready(cast(dict[str, Any], payload)):
+            if isinstance(payload, dict) and self._status_json_is_ready(
+                cast(dict[str, Any], payload)
+            ):
                 return
 
             if time.monotonic() >= deadline:
@@ -351,7 +353,12 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
                 metadata = {}
             hits.append(
                 SearchHit(
-                    id=str(row.get("entity_id") or row.get("observation_id") or row.get("relation_id") or ""),
+                    id=str(
+                        row.get("entity_id")
+                        or row.get("observation_id")
+                        or row.get("relation_id")
+                        or ""
+                    ),
                     source_doc_id=self._doc_id_from_item(row),
                     source_path=row.get("file_path") or row.get("permalink"),
                     text=row.get("matched_chunk") or row.get("content"),
@@ -371,7 +378,9 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
     def version_info(self) -> dict[str, str]:
         metadata: dict[str, str] = {"bm_transport": "mcp-stdio"}
         if self._status_json_supported is not None:
-            metadata["bm_status_json_supported"] = "true" if self._status_json_supported else "false"
+            metadata["bm_status_json_supported"] = (
+                "true" if self._status_json_supported else "false"
+            )
         metadata["bm_command"] = " ".join(self._bm_command_prefix)
         try:
             result = self._run_bm(["--version"])

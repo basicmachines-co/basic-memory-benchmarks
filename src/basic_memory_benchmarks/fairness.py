@@ -7,7 +7,9 @@ from collections.abc import Mapping, Sequence
 from basic_memory_benchmarks.models import PerQueryRetrievalResult
 
 
-def validate_fairness(results_by_provider: Mapping[str, Sequence[PerQueryRetrievalResult]]) -> list[str]:
+def validate_fairness(
+    results_by_provider: Mapping[str, Sequence[PerQueryRetrievalResult]],
+) -> list[str]:
     """Validate that all providers were scored on the same query set.
 
     Returns a list of warnings. Empty list means no mismatch detected.

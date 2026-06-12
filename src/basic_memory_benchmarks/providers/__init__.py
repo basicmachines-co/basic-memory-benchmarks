@@ -8,6 +8,7 @@ from basic_memory_benchmarks.providers.baseline_grep import FilesystemGrepProvid
 from basic_memory_benchmarks.providers.bm_cloud import BasicMemoryCloudProvider
 from basic_memory_benchmarks.providers.bm_local import BasicMemoryLocalProvider
 from basic_memory_benchmarks.providers.mem0_local import Mem0LocalProvider
+from basic_memory_benchmarks.providers.supermemory_local import SupermemoryLocalProvider
 from basic_memory_benchmarks.providers.zep_reference import ZepReferenceProvider
 
 
@@ -25,6 +26,8 @@ def create_provider(name: str) -> BenchmarkProvider:
         return FilesystemGrepProvider()
     if normalized == "baseline-fullcontext":
         return FullContextProvider()
+    if normalized == "supermemory-local":
+        return SupermemoryLocalProvider()
     raise ValueError(f"Unknown provider: {name}")
 
 
@@ -36,4 +39,5 @@ def provider_names() -> list[str]:
         "zep-reference",
         "baseline-grep",
         "baseline-fullcontext",
+        "supermemory-local",
     ]

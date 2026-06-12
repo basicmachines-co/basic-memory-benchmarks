@@ -12,7 +12,9 @@ from typing import Any
 from basic_memory_benchmarks.models import JudgeCaseResult, JudgeSummary, PerQueryRetrievalResult
 
 
-def _deterministic_contains_eval(rows: list[PerQueryRetrievalResult], provider: str) -> tuple[list[JudgeCaseResult], JudgeSummary]:
+def _deterministic_contains_eval(
+    rows: list[PerQueryRetrievalResult], provider: str
+) -> tuple[list[JudgeCaseResult], JudgeSummary]:
     case_results: list[JudgeCaseResult] = []
     for row in rows:
         expected = (row.expected_answer or "").strip().lower()

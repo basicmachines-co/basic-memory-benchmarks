@@ -22,7 +22,9 @@ def test_manifest_schema_roundtrip() -> None:
             license_note="test",
             fetched_at_utc="2026-01-01T00:00:00Z",
         ),
-        runtime=RuntimeInfo(os="test", python_version="3.12", started_at_utc="2026-01-01T00:00:00Z"),
+        runtime=RuntimeInfo(
+            os="test", python_version="3.12", started_at_utc="2026-01-01T00:00:00Z"
+        ),
         config=config,
     )
     payload = manifest.model_dump(mode="json")

@@ -137,14 +137,18 @@ def summarize_provider(provider: str, rows: list[PerQueryRetrievalResult]) -> Re
     for row in rows:
         by_category.setdefault(row.category, []).append(row)
 
-    category_metrics = {category: _aggregate_metrics(group) for category, group in by_category.items()}
+    category_metrics = {
+        category: _aggregate_metrics(group) for category, group in by_category.items()
+    }
 
     official_rows = [
         row
         for row in rows
         if row.category in OFFICIAL_HEADLINE_CATEGORIES or row.category_id in {1, 2, 3, 4}
     ]
-    adversarial_rows = [row for row in rows if row.category == "adversarial" or row.category_id == 5]
+    adversarial_rows = [
+        row for row in rows if row.category == "adversarial" or row.category_id == 5
+    ]
 
     return RetrievalSummary(
         provider=provider,
