@@ -350,3 +350,31 @@ class TestContextBudgetOverride:
             max_context_chars=30_000,
         )
         assert answerer.prompts[0].count("z") == 30_000
+
+
+class TestHitTitleInContext:
+    def test_title_metadata_lands_in_header(self):
+        from basic_memory_benchmarks.models import SearchHit
+        from basic_memory_benchmarks.scoring.qa import assemble_context
+
+        hit = SearchHit(
+            source_doc_id="doc-a",
+            text="- **Melanie:** I hiked yesterday!",
+            score=1.0,
+            metadata={"title": "locomo-c00-s18 (3:01 pm on 20 October, 2023)"},
+        )
+        ctx = assemble_context([hit])
+        assert "| locomo-c00-s18 (3:01 pm on 20 October, 2023)]" in ctx
+
+    def test_title_skipped_when_already_in_text(self):
+        from basic_memory_benchmarks.models import SearchHit
+        from basic_memory_benchmarks.scoring.qa import assemble_context
+
+        hit = SearchHit(
+            source_doc_id="doc-a",
+            text="# Chat session at 8 May 2023\nfull body",
+            score=1.0,
+            metadata={"title": "Chat session at 8 May 2023"},
+        )
+        ctx = assemble_context([hit])
+        assert ctx.count("Chat session at 8 May 2023") == 1

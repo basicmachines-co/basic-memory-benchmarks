@@ -140,7 +140,11 @@ def assemble_context(hits: list[SearchHit], max_chars: int = CONTEXT_MAX_CHARS) 
             if not snippet:
                 break
         source = hit.source_doc_id or hit.source_path or "unknown"
-        sections.append(f"[Memory {rank} | source: {source}]\n{snippet}")
+        title = (hit.metadata or {}).get("title")
+        header = f"[Memory {rank} | source: {source}]"
+        if title and str(title) not in snippet:
+            header = f"[Memory {rank} | source: {source} | {title}]"
+        sections.append(f"{header}\n{snippet}")
         used += len(snippet)
         if used >= max_chars:
             break
