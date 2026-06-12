@@ -184,6 +184,31 @@ recommended/headline mode); default is `false` (raw add), which matches the
 existing baselines. The active backend, models, and infer mode are recorded in
 the run manifest's provider metadata.
 
+## supermemory local requirements
+
+`supermemory-local` targets a running [supermemory-server](https://github.com/supermemoryai/supermemory)
+(self-hosted binary; pin v0.0.2). The provider does not manage the server —
+start it yourself and export:
+
+```bash
+export SUPERMEMORY_API_KEY=sm_...          # printed on the server's first boot
+# optional:
+# SUPERMEMORY_BASE_URL=http://localhost:6767
+# SUPERMEMORY_INGEST_TIMEOUT_S=900
+# SUPERMEMORY_SERVER_VERSION=0.0.2        # recorded in the run manifest
+```
+
+Server-side notes for fair runs: start from a **fresh** `SUPERMEMORY_DATA_DIR`
+per benchmark (upstream issue #1103: upgraded stores return empty searches),
+and configure its LLM via `OPENAI_BASE_URL`/`OPENAI_MODEL`. Ingestion is async
+(queued → ... → done|failed); the provider polls every document to a terminal
+state before searching and fails the run loudly on any failed document rather
+than silently scoring partial ingestion. Scoping is one container tag per run
+id; cleanup bulk-deletes the container.
+
+Without `SUPERMEMORY_API_KEY` or with the server unreachable, provider status
+is recorded as `SKIPPED(reason)`.
+
 ## BM indexing readiness
 
 `bm-local` verifies index readiness before querying.
