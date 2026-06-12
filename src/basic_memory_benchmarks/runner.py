@@ -54,8 +54,13 @@ def _execute_provider_flat(
     queries: list[QueryCase],
     corpus_path: Path,
     run_config: RunConfig,
+    cleanup_after: bool = True,
 ) -> list[PerQueryRetrievalResult]:
-    """Classic single-corpus execution: one ingest, then every query."""
+    """Classic single-corpus execution: one ingest, then every query.
+
+    ``cleanup_after=False`` is the group-reuse path: the grouped executor owns
+    the provider's lifecycle and cleans up once at end of run.
+    """
     provider_rows: list[PerQueryRetrievalResult] = []
     try:
         provider.ingest(corpus_path, run_config)
@@ -72,11 +77,12 @@ def _execute_provider_flat(
                 )
             )
     finally:
-        try:
-            provider.cleanup(run_config)
-        except Exception:
-            # Cleanup errors should not mask run state.
-            pass
+        if cleanup_after:
+            try:
+                provider.cleanup(run_config)
+            except Exception:
+                # Cleanup errors should not mask run state.
+                pass
     return provider_rows
 
 
@@ -108,33 +114,51 @@ def _execute_provider_grouped(
     provider_rows: list[PerQueryRetrievalResult] = []
     failed_groups: list[str] = []
     last_provider: BenchmarkProvider | None = None
-    for group_index, (group_id, group_queries) in enumerate(sorted(groups.items())):
-        group_corpus = corpus_path / group_id / "docs"
-        if not group_corpus.exists():
-            raise FileNotFoundError(f"Missing group corpus: {group_corpus}")
-        group_config = run_config.model_copy(update={"run_id": f"{run_config.run_id}-{group_id}"})
-        provider = provider_factory(provider_name)
-        try:
-            provider_rows.extend(
-                _execute_provider_flat(
-                    provider=provider,
-                    provider_name=provider_name,
-                    queries=group_queries,
-                    corpus_path=group_corpus,
-                    run_config=group_config,
-                )
+    shared_provider = provider_factory(provider_name)
+    reuse = shared_provider.supports_group_reuse
+    try:
+        for group_index, (group_id, group_queries) in enumerate(sorted(groups.items())):
+            group_corpus = corpus_path / group_id / "docs"
+            if not group_corpus.exists():
+                raise FileNotFoundError(f"Missing group corpus: {group_corpus}")
+            group_config = run_config.model_copy(
+                update={"run_id": f"{run_config.run_id}-{group_id}"}
             )
-            last_provider = provider
-        except ProviderSkippedError:
-            # Trigger: provider signals it cannot run at all (missing creds).
-            # Why: the first group is representative; retrying hundreds of
-            # groups against an unavailable provider wastes hours.
-            # Outcome: the provider is recorded as skipped for the whole run.
-            if group_index == 0:
-                raise
-            failed_groups.append(group_id)
-        except Exception:
-            failed_groups.append(group_id)
+            # Non-reuse providers still use the shared instance for the first
+            # group so capability probing doesn't cost an extra instance.
+            if reuse or group_index == 0:
+                provider = shared_provider
+            else:
+                provider = provider_factory(provider_name)
+            try:
+                provider_rows.extend(
+                    _execute_provider_flat(
+                        provider=provider,
+                        provider_name=provider_name,
+                        queries=group_queries,
+                        corpus_path=group_corpus,
+                        run_config=group_config,
+                        cleanup_after=not reuse,
+                    )
+                )
+                last_provider = provider
+            except ProviderSkippedError:
+                # Trigger: provider signals it cannot run at all (missing creds).
+                # Why: the first group is representative; retrying hundreds of
+                # groups against an unavailable provider wastes hours.
+                # Outcome: the provider is recorded as skipped for the whole run.
+                if group_index == 0:
+                    raise
+                failed_groups.append(group_id)
+            except Exception:
+                failed_groups.append(group_id)
+    finally:
+        if reuse:
+            try:
+                shared_provider.cleanup(run_config)
+            except Exception:
+                # Cleanup errors should not mask run state.
+                pass
 
     if last_provider is None:
         raise RuntimeError(f"All {len(failed_groups)} groups failed for provider {provider_name}")

@@ -205,3 +205,77 @@ class TestGroupedExecution:
                 dataset=_provenance(),
                 provider_factory=lambda name: RecordingProvider(),
             )
+
+
+class ReusingProvider(RecordingProvider):
+    """RecordingProvider variant that opts into group reuse."""
+
+    name = "reusing"
+    supports_group_reuse = True
+    calls: list[tuple[str, str, str]] = []
+    fail_groups: set[str] = set()
+    skip_all = False
+    instances = 0
+
+
+@pytest.fixture(autouse=True)
+def _reset_reusing_provider():
+    ReusingProvider.calls = []
+    ReusingProvider.fail_groups = set()
+    ReusingProvider.skip_all = False
+    ReusingProvider.instances = 0
+
+
+class TestGroupReuse:
+    def test_single_instance_serves_all_groups(self, tmp_path):
+        corpus_root, queries_path = _setup_grouped_corpus(tmp_path, ["qa", "qb", "qc"])
+        config = _run_config(tmp_path, corpus_root, queries_path)
+        config = config.model_copy(update={"providers": ["reusing"]})
+
+        run_dir = run_retrieval(
+            run_config=config,
+            dataset=_provenance(),
+            provider_factory=lambda name: ReusingProvider(),
+        )
+
+        assert ReusingProvider.instances == 1
+        ingests = [c for c in ReusingProvider.calls if c[0] == "ingest"]
+        assert len(ingests) == 3
+        # Per-group run ids still namespace projects within the one instance.
+        assert {run_id for _, _, run_id in ingests} == {
+            "testrun-qa",
+            "testrun-qb",
+            "testrun-qc",
+        }
+        # Cleanup exactly once, with the BASE run id, after all groups.
+        cleanups = [c for c in ReusingProvider.calls if c[0] == "cleanup"]
+        assert [run_id for _, _, run_id in cleanups] == ["testrun"]
+        assert ReusingProvider.calls[-1][0] == "cleanup"
+
+        rows = [
+            json.loads(line)
+            for line in (run_dir / "per-query-retrieval.jsonl").read_text().splitlines()
+        ]
+        assert {row["query_id"] for row in rows} == {"qa", "qb", "qc"}
+
+    def test_failed_group_does_not_stop_reuse(self, tmp_path):
+        corpus_root, queries_path = _setup_grouped_corpus(tmp_path, ["qa", "qb", "qc"])
+        ReusingProvider.fail_groups = {"qb"}
+        config = _run_config(tmp_path, corpus_root, queries_path)
+        config = config.model_copy(update={"providers": ["reusing"]})
+
+        run_dir = run_retrieval(
+            run_config=config,
+            dataset=_provenance(),
+            provider_factory=lambda name: ReusingProvider(),
+        )
+
+        assert ReusingProvider.instances == 1
+        rows = [
+            json.loads(line)
+            for line in (run_dir / "per-query-retrieval.jsonl").read_text().splitlines()
+        ]
+        assert {row["query_id"] for row in rows} == {"qa", "qc"}
+        # Cleanup still ran exactly once at the end.
+        cleanups = [c for c in ReusingProvider.calls if c[0] == "cleanup"]
+        assert len(cleanups) == 1

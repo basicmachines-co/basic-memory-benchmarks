@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from concurrent.futures import Future
@@ -117,30 +118,43 @@ class _WarmMcpClient:
 
 class BasicMemoryLocalProvider(BenchmarkProvider):
     name = "bm-local"
+    # One instance serves every group in a grouped run: the warm MCP session
+    # and isolated config dir are shared, projects are per-group.
+    supports_group_reuse = True
 
     def __init__(self) -> None:
-        self._resolved_project_name: str | None = None
+        # run_id -> resolved project name (grouped runs ingest many projects).
+        self._resolved_project_names: dict[str, str] = {}
         self._status_json_supported: bool | None = None
         self._mcp: _WarmMcpClient | None = None
         self._bm_command_prefix: list[str] = ["bm"]
         self._bm_env: dict[str, str] | None = None
+        self._config_dir: Path | None = None
 
-    @staticmethod
-    def _isolated_bm_env() -> dict[str, str]:
+    def _isolated_bm_env(self) -> dict[str, str]:
         # The benchmark must not depend on (or mutate) the operator's personal
         # Basic Memory config — e.g. a cloud-mode setup would route search_notes
         # through cloud.basicmemory.com. BASIC_MEMORY_CONFIG_DIR scopes config,
         # database, and project registry to a benchmark-owned directory.
-        bm_home = Path("benchmarks/bm-home").resolve()
-        bm_home.mkdir(parents=True, exist_ok=True)
+        #
+        # The directory is FRESH per provider instance: a persistent shared
+        # home rots across basic-memory versions (alembic migrations from a
+        # newer dev build brick older binaries) and leaks projects between
+        # runs. BASIC_MEMORY_HOME is dropped for the same reason.
+        if self._config_dir is None:
+            root = Path("benchmarks/.bm-homes")
+            root.mkdir(parents=True, exist_ok=True)
+            self._config_dir = Path(tempfile.mkdtemp(prefix="bm-home-", dir=root))
         env = dict(os.environ)
         env.pop("BASIC_MEMORY_CLOUD_MODE", None)
-        env["BASIC_MEMORY_CONFIG_DIR"] = str(bm_home)
+        env.pop("BASIC_MEMORY_HOME", None)
+        env["BASIC_MEMORY_CONFIG_DIR"] = str(self._config_dir)
         return env
 
     def _project_name(self, run_config: RunConfig) -> str:
-        if self._resolved_project_name is not None:
-            return self._resolved_project_name
+        resolved = self._resolved_project_names.get(run_config.run_id)
+        if resolved is not None:
+            return resolved
         return f"bm-bench-{run_config.run_id}"
 
     @staticmethod
@@ -254,6 +268,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
             return
 
         deadline = time.monotonic() + 120.0
+        delay = 0.25
         while True:
             completed = self._run_bm(
                 [
@@ -274,7 +289,10 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
                 raise TimeoutError(
                     f"Timed out waiting for bm status --json readiness for project '{project_name}'"
                 )
-            time.sleep(2.0)
+            # Small corpora index in well under a second; start polling fast
+            # and back off instead of paying a fixed 2s floor per group.
+            time.sleep(delay)
+            delay = min(delay * 2, 2.0)
 
     def ingest(self, corpus_path: Path, run_config: RunConfig) -> None:
         self._bm_command_prefix = self._resolve_bm_command_prefix(run_config)
@@ -299,7 +317,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
                     raise
                 project_name = existing
 
-        self._resolved_project_name = project_name
+        self._resolved_project_names[run_config.run_id] = project_name
 
         try:
             self._run_bm(["reindex", "--search", "--embeddings", "-p", project_name])
@@ -308,10 +326,16 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
 
         self._wait_for_index_ready(project_name)
 
-        mcp_command = self._bm_command_prefix[0]
-        mcp_args = self._bm_command_prefix[1:] + ["mcp"]
-        self._mcp = _WarmMcpClient(command=mcp_command, args=mcp_args, env=self._bm_env)
-        self._mcp.start()
+        # Trigger: first ingest of this provider instance
+        # Why: an MCP session serves projects added after it started, so one
+        # warm session covers every group in a grouped run — restarting it
+        # per group wastes seconds x hundreds of groups.
+        # Outcome: session starts once; cleanup() at end of run stops it.
+        if self._mcp is None:
+            mcp_command = self._bm_command_prefix[0]
+            mcp_args = self._bm_command_prefix[1:] + ["mcp"]
+            self._mcp = _WarmMcpClient(command=mcp_command, args=mcp_args, env=self._bm_env)
+            self._mcp.start()
 
     @staticmethod
     def _doc_id_from_item(item: dict) -> str | None:

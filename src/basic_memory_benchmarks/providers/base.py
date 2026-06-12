@@ -10,6 +10,10 @@ from basic_memory_benchmarks.models import RunConfig, SearchHit
 
 class BenchmarkProvider(ABC):
     name: str
+    # Grouped runs: when True, one provider instance serves every group
+    # (ingest called per group; cleanup called once at end of run). When
+    # False, a fresh instance is created and cleaned up per group.
+    supports_group_reuse: bool = False
 
     @abstractmethod
     def ingest(self, corpus_path: Path, run_config: RunConfig) -> None:
