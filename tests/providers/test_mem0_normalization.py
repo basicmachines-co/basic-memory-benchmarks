@@ -66,3 +66,61 @@ class TestLocalBackendConfig:
         assert Mem0LocalProvider()._infer is False
         monkeypatch.delenv("MEM0_INFER")
         assert Mem0LocalProvider()._infer is False
+
+
+class TestTelemetryLockAvoidance:
+    def test_telemetry_disabled_before_import(self, monkeypatch):
+        import os
+
+        from basic_memory_benchmarks.providers.mem0_local import Mem0LocalProvider
+
+        monkeypatch.setenv("MEM0_OPENAI_COMPAT_BASE_URL", "http://localhost:1/v1")
+        monkeypatch.delenv("MEM0_TELEMETRY", raising=False)
+        provider = Mem0LocalProvider()
+        # _ensure_memory sets the env var before importing mem0; construction
+        # against the dead endpoint may fail later, which is fine here.
+        try:
+            provider._ensure_memory(
+                __import__("basic_memory_benchmarks.models", fromlist=["RunConfig"]).RunConfig(
+                    run_id="t", dataset_id="t", dataset_path="t", corpus_dir="t", queries_path="t"
+                )
+            )
+        except Exception:
+            pass
+        assert os.environ["MEM0_TELEMETRY"] == "false"
+
+    def test_cleanup_closes_clients_and_drops_memory(self):
+        from basic_memory_benchmarks.providers.mem0_local import Mem0LocalProvider
+
+        class FakeClient:
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        class FakeStore:
+            def __init__(self):
+                self.client = FakeClient()
+
+        class FakeMemory:
+            def __init__(self):
+                self.vector_store = FakeStore()
+                self._telemetry_vector_store = FakeStore()
+
+            def delete_all(self, user_id):
+                pass
+
+        provider = Mem0LocalProvider()
+        memory = FakeMemory()
+        provider._memory = memory
+
+        from basic_memory_benchmarks.models import RunConfig
+
+        provider.cleanup(
+            RunConfig(
+                run_id="t", dataset_id="t", dataset_path="t", corpus_dir="t", queries_path="t"
+            )
+        )
+        assert memory.vector_store.client.closed
+        assert memory._telemetry_vector_store.client.closed
+        assert provider._memory is None

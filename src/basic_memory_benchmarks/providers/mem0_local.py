@@ -82,6 +82,16 @@ class Mem0LocalProvider(BenchmarkProvider):
         if self._memory is not None:
             return self._memory
 
+        # Trigger: mem0 with MEM0_TELEMETRY on (its default) opens a qdrant
+        # client at a FIXED path (~/.mem0/migrations_qdrant) inside every
+        # Memory(); qdrant local mode allows one client per path per process,
+        # so the second provider instance in a grouped run dies with
+        # "Storage folder ... is already accessed" (matrix v1: 24/25 LME and
+        # 30/30 ConvoMem groups lost).
+        # Why: benchmark runs should not emit telemetry anyway.
+        # Outcome: telemetry store never created; operator can force-enable.
+        os.environ.setdefault("MEM0_TELEMETRY", "false")
+
         from mem0 import Memory  # Deferred import to keep startup lightweight
 
         base_url = os.getenv("MEM0_OPENAI_COMPAT_BASE_URL")
@@ -175,7 +185,18 @@ class Mem0LocalProvider(BenchmarkProvider):
             self._memory.delete_all(user_id=self._user_id(run_config))
         except Exception:
             # Cleanup should never break the main benchmark flow.
-            return
+            pass
+        # Release qdrant local-mode file locks even while this instance is
+        # still referenced (the grouped runner keeps the last provider for
+        # version_info), or the next instance cannot open its stores.
+        for store_attr in ("vector_store", "_telemetry_vector_store"):
+            client = getattr(getattr(self._memory, store_attr, None), "client", None)
+            if client is not None and hasattr(client, "close"):
+                try:
+                    client.close()
+                except Exception:
+                    pass
+        self._memory = None
 
     def version_info(self) -> dict[str, str]:
         metadata: dict[str, str] = {
