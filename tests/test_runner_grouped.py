@@ -279,3 +279,22 @@ class TestGroupReuse:
         # Cleanup still ran exactly once at the end.
         cleanups = [c for c in ReusingProvider.calls if c[0] == "cleanup"]
         assert len(cleanups) == 1
+
+
+class TestGroupErrorCapture:
+    def test_first_errors_recorded_in_metadata(self, tmp_path):
+        corpus_root, queries_path = _setup_grouped_corpus(tmp_path, ["qa", "qb", "qc"])
+        RecordingProvider.fail_groups = {"qb", "qc"}
+        config = _run_config(tmp_path, corpus_root, queries_path)
+
+        run_dir = run_retrieval(
+            run_config=config,
+            dataset=_provenance(),
+            provider_factory=lambda name: RecordingProvider(),
+        )
+
+        status = json.loads((run_dir / "provider-status.json").read_text())
+        meta = status[0]["metadata"]
+        assert meta["failed_group_count"] == "2"
+        assert "qb: RuntimeError: boom in qb" in meta["failed_group_error_0"]
+        assert "qc: RuntimeError: boom in qc" in meta["failed_group_error_1"]
