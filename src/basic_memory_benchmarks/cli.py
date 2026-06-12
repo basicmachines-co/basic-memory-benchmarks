@@ -12,6 +12,7 @@ from rich.console import Console
 from basic_memory_benchmarks.converters.locomo_to_corpus import convert_locomo_to_corpus
 from basic_memory_benchmarks.converters.longmemeval_to_corpus import convert_longmemeval_to_corpus
 from basic_memory_benchmarks.datasets.locomo import LOCOMO_URL, fetch_locomo_dataset
+from basic_memory_benchmarks.datasets.locomo_audit import fetch_locomo_audit_corrections
 from basic_memory_benchmarks.datasets.longmemeval import (
     LONGMEMEVAL_S_URL,
     fetch_longmemeval_dataset,
@@ -50,8 +51,11 @@ def datasets_fetch(
         provenance = fetch_longmemeval_dataset(
             output_path=resolved_output, url=url or LONGMEMEVAL_S_URL
         )
+    elif dataset == "locomo-audit":
+        resolved_output = output or Path("benchmarks/datasets/locomo-audit/corrections.json")
+        provenance = fetch_locomo_audit_corrections(output_path=resolved_output)
     else:
-        raise typer.BadParameter("Supported datasets: locomo, longmemeval-s")
+        raise typer.BadParameter("Supported datasets: locomo, longmemeval-s, locomo-audit")
 
     console.print(f"Downloaded {dataset} to [cyan]{resolved_output}[/cyan]")
     console.print(f"SHA256: [green]{provenance.checksum_sha256}[/green]")
@@ -64,11 +68,17 @@ def convert_locomo(
     ),
     output_dir: Path = typer.Option(Path("benchmarks/generated/locomo"), "--output-dir"),
     max_conversations: int | None = typer.Option(None, "--max-conversations"),
+    audit_corrections: Path | None = typer.Option(
+        None,
+        "--audit-corrections",
+        help="Penfield audit corrections.json; applies corrected answers/evidence",
+    ),
 ) -> None:
     docs_dir, queries_path, doc_count, query_count = convert_locomo_to_corpus(
         dataset_path=dataset_path,
         output_dir=output_dir,
         max_conversations=max_conversations,
+        audit_corrections_path=audit_corrections,
     )
     console.print(f"Docs: [cyan]{docs_dir}[/cyan] ({doc_count})")
     console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
