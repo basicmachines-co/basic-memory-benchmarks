@@ -26,7 +26,11 @@ def _session_num_from_evidence(evidence_id: str) -> int | None:
 
 
 def _sorted_session_keys(conversation_blob: dict) -> list[str]:
-    keys = [k for k, v in conversation_blob.items() if re.match(r"^session_\d+$", k) and isinstance(v, list)]
+    keys = [
+        k
+        for k, v in conversation_blob.items()
+        if re.match(r"^session_\d+$", k) and isinstance(v, list)
+    ]
     return sorted(keys, key=lambda key: int(key.split("_")[1]))
 
 
@@ -34,13 +38,27 @@ def convert_locomo_to_corpus(
     dataset_path: Path,
     output_dir: Path,
     max_conversations: int | None = None,
+    audit_corrections_path: Path | None = None,
 ) -> tuple[Path, Path, int, int]:
     """Convert LoCoMo into markdown docs + query manifest.
+
+    When ``audit_corrections_path`` is given, the Penfield audit's corrected
+    answers and evidence citations replace the originals for the 156 known
+    answer-key errors. Each corrected query is cross-checked by question text
+    so audit/dataset drift fails loudly.
 
     Returns:
         docs_dir, queries_path, doc_count, query_count
     """
+    corrections: dict[str, dict] = {}
+    if audit_corrections_path is not None:
+        from basic_memory_benchmarks.datasets.locomo_audit import load_locomo_corrections
+
+        corrections = load_locomo_corrections(audit_corrections_path)
+
     conversations = load_locomo_dataset(dataset_path)
+    # Prefix slicing keeps conv_index aligned with the audit's
+    # locomo_<conv>_qa<index> ids.
     if max_conversations is not None:
         conversations = conversations[:max_conversations]
 
@@ -91,7 +109,29 @@ def convert_locomo_to_corpus(
             category_id = int(qa.get("category", 0))
             category = CATEGORY_MAP.get(category_id, f"cat_{category_id}")
 
+            answer = qa.get("answer") or qa.get("adversarial_answer")
             evidence = qa.get("evidence") or []
+            metadata: dict = {
+                "dataset_id": "locomo",
+                "conversation_id": conv_id,
+                "adversarial": category_id == 5,
+            }
+
+            correction = corrections.get(f"locomo_{conv_index}_qa{query_index}")
+            if correction is not None:
+                audit_question = str(correction.get("question", "")).strip()
+                actual_question = str(qa.get("question", "")).strip()
+                if audit_question != actual_question:
+                    raise ValueError(
+                        f"Audit correction locomo_{conv_index}_qa{query_index} does not "
+                        f"match dataset question: {audit_question!r} != {actual_question!r}"
+                    )
+                answer = correction["correct_answer"]
+                if correction.get("correct_evidence"):
+                    evidence = correction["correct_evidence"]
+                metadata["audit_corrected"] = True
+                metadata["audit_error_type"] = str(correction["error_type"])
+
             ground_truth_docs: set[str] = set()
             for evidence_id in evidence:
                 if not isinstance(evidence_id, str):
@@ -102,7 +142,6 @@ def convert_locomo_to_corpus(
                 if session_num in session_doc_id:
                     ground_truth_docs.add(session_doc_id[session_num])
 
-            answer = qa.get("answer") or qa.get("adversarial_answer")
             all_queries.append(
                 {
                     "id": f"{conv_id}-q{query_index:04d}",
@@ -111,11 +150,7 @@ def convert_locomo_to_corpus(
                     "category_id": category_id,
                     "ground_truth": sorted(ground_truth_docs),
                     "expected_answer": str(answer).strip() if answer else None,
-                    "metadata": {
-                        "dataset_id": "locomo",
-                        "conversation_id": conv_id,
-                        "adversarial": category_id == 5,
-                    },
+                    "metadata": metadata,
                 }
             )
 

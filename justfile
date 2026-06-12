@@ -65,6 +65,12 @@ bench-convert-longmemeval-dev:
 
 bench-prepare-longmemeval: bench-fetch-longmemeval bench-convert-longmemeval
 
+bench-fetch-locomo-audit:
+    uv run bm-bench datasets fetch --dataset locomo-audit
+
+bench-convert-locomo-corrected: bench-fetch-locomo bench-fetch-locomo-audit
+    uv run bm-bench convert locomo --dataset-path {{locomo_dataset_path}} --output-dir benchmarks/generated/locomo-corrected --audit-corrections benchmarks/datasets/locomo-audit/corrections.json
+
 # Grouped retrieval over the LongMemEval-S dev slice (bm-local only)
 bench-run-longmemeval-dev:
     uv run bm-bench run retrieval \

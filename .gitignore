@@ -18,3 +18,4 @@ benchmarks/datasets/locomo/locomo10.provenance.json
 benchmarks/bm-home/
 benchmarks/datasets/longmemeval/longmemeval_s.json
 benchmarks/datasets/longmemeval/longmemeval_s.provenance.json
+benchmarks/datasets/locomo-audit/

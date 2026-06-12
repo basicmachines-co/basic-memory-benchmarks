@@ -98,6 +98,28 @@ uv run bm-bench run judge --run-dir benchmarks/runs/<run-id>
 uv run bm-bench publish --run-dir benchmarks/runs/<run-id>
 ```
 
+## LoCoMo corrected answer key
+
+The April 2026 Penfield Labs audit ([locomo-audit](https://github.com/dial481/locomo-audit))
+found 156 answer-key errors in LoCoMo's 1,540 usable questions — hallucinated
+facts, temporal arithmetic mistakes, attribution errors, and wrong evidence
+citations. Published LoCoMo numbers should score against the corrected key and
+say so.
+
+```bash
+uv run bm-bench datasets fetch --dataset locomo-audit   # pinned audit revision
+uv run bm-bench convert locomo \
+  --audit-corrections benchmarks/datasets/locomo-audit/corrections.json \
+  --output-dir benchmarks/generated/locomo-corrected
+```
+
+Corrected queries replace both the expected answer (for QA scoring) and the
+evidence citations (for retrieval ground truth), and carry
+`audit_corrected: true` + the audit's error type in metadata. Every correction
+is cross-checked against the dataset's question text at conversion time, so
+audit/dataset drift fails loudly. The adversarial category remains excluded
+from headline metrics per the LoCoMo protocol.
+
 ## LongMemEval-S
 
 LongMemEval (Wu et al., ICLR 2025) gives each of its 500 questions an
