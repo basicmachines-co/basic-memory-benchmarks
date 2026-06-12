@@ -24,6 +24,8 @@ class QueryCase(BaseModel):
     query: str
     category: str
     category_id: int | None = None
+    # Grouped datasets (LongMemEval) scope each query to its own corpus group.
+    group: str | None = None
     ground_truth: list[str] = Field(default_factory=list)
     expected_answer: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -66,6 +68,7 @@ class PerQueryRetrievalResult(BaseModel):
     latency_ms: float
     top_hit_doc_id: str | None = None
     retrieved_context: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class RetrievalSummary(BaseModel):

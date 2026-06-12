@@ -217,3 +217,25 @@ class TestQAStageArtifacts:
         summary = json.loads((tmp_path / "qa-summary.json").read_text())
         assert summary["providers"][0]["provider"] == "bm-local"
         assert summary["providers"][0]["total_cases"] == 1
+
+
+class TestQuestionDate:
+    def test_question_date_reaches_answerer_and_judge(self):
+        row = _row("q1", "How many weeks ago did I visit the dentist?", "Three weeks ago", "ctx")
+        row = row.model_copy(update={"metadata": {"question_date": "2023/05/30 (Tue) 23:40"}})
+        answerer = FakeRunner({}, default="Three weeks ago")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+
+        run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
+
+        assert "question asked on 2023/05/30 (Tue) 23:40" in answerer.prompts[0]
+        assert "question asked on 2023/05/30 (Tue) 23:40" in judge.prompts[0]
+
+    def test_no_date_means_plain_question(self):
+        row = _row("q1", "Where does Joanna live?", "Austin", "ctx")
+        answerer = FakeRunner({}, default="Austin")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+
+        run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
+
+        assert "question asked on" not in answerer.prompts[0]

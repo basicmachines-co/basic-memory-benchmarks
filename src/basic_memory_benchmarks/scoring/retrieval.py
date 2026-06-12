@@ -108,6 +108,7 @@ def evaluate_query(
         latency_ms=latency_ms,
         top_hit_doc_id=top_hit_doc_id,
         retrieved_context=context,
+        metadata=query.metadata,
     )
 
 

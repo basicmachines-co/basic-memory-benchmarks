@@ -104,18 +104,30 @@ def _is_abstention(answer: str) -> bool:
     return normalized == ABSTAIN_SENTINEL.strip(".").lower()
 
 
+def _question_display(row: PerQueryRetrievalResult) -> str:
+    """Render the question with its ask-date when the dataset provides one.
+
+    Temporal-reasoning questions ("how many weeks ago...") are unanswerable
+    without the reference date, and both the answerer and the judge need the
+    same framing.
+    """
+    question_date = row.metadata.get("question_date")
+    if question_date:
+        return f"{row.query_text} (question asked on {question_date})"
+    return row.query_text
+
+
 def _score_case(
     row: PerQueryRetrievalResult,
     provider: str,
     answerer: LLMRunner,
     judge: LLMRunner,
 ) -> QACaseResult:
+    question = _question_display(row)
     try:
-        answer_result = answerer.complete(
-            build_answer_prompt(row.query_text, row.retrieved_context)
-        )
+        answer_result = answerer.complete(build_answer_prompt(question, row.retrieved_context))
         judge_result = judge.complete(
-            build_judge_prompt(row.query_text, row.expected_answer or "", answer_result.text)
+            build_judge_prompt(question, row.expected_answer or "", answer_result.text)
         )
         correct, reason = parse_judge_verdict(judge_result.text)
         return QACaseResult(
