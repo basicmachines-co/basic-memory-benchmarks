@@ -56,13 +56,43 @@ uv run bm-bench run retrieval \
   --queries-path benchmarks/generated/locomo/queries.json
 ```
 
-### 4) Optional judge benchmark
+### 4) End-to-end QA scoring
+
+Generates an answer per query from each provider's retrieved context, then
+grades it against the expected answer with an LLM judge. This is the stage that
+produces benchmark-comparable accuracy numbers; retrieval metrics alone measure
+only the search layer.
+
+```bash
+uv run bm-bench run qa --run-dir benchmarks/runs/<run-id> \
+  --answerer claude:claude-haiku-4-5 \
+  --judge claude:claude-sonnet-4-6
+```
+
+Runner specs select the transport:
+
+- `claude:<model>` — Claude Code CLI in print mode. Bills the operator's Claude
+  subscription plan; no API key needed. Requires `claude` on PATH.
+- `openai-compat:<model>@<base_url>` — any OpenAI-compatible endpoint (Ollama,
+  LM Studio, vLLM, OpenAI). Set `OPENAI_API_KEY` if the endpoint requires auth.
+
+The same answerer and judge are used for every provider in the run, so
+cross-provider comparisons hold the model constant. Answer and judge prompts
+are fixed in `scoring/qa.py`; the answerer is instructed to abstain ("I don't
+know") when the retrieved memories don't contain the answer, and abstention is
+graded correct only when the gold answer marks the question unanswerable
+(LoCoMo adversarial cases).
+
+### 5) Optional retrieval-context judge (legacy)
+
+Scores whether the *retrieved context* contains the expected answer, without
+answer generation:
 
 ```bash
 uv run bm-bench run judge --run-dir benchmarks/runs/<run-id>
 ```
 
-### 5) Publish run artifacts
+### 6) Publish run artifacts
 
 ```bash
 uv run bm-bench publish --run-dir benchmarks/runs/<run-id>
@@ -110,6 +140,8 @@ Per run (`benchmarks/runs/<run-id>/`):
 - `provider-status.json`
 - `per-query-retrieval.jsonl`
 - `retrieval-summary.json`
+- `per-query-qa.jsonl` (optional)
+- `qa-summary.json` (optional)
 - `per-query-judge.jsonl` (optional)
 - `judge-summary.json` (optional)
 - `summary.md`

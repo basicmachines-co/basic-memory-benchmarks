@@ -13,7 +13,7 @@ from basic_memory_benchmarks.converters.locomo_to_corpus import convert_locomo_t
 from basic_memory_benchmarks.datasets.locomo import LOCOMO_URL, fetch_locomo_dataset
 from basic_memory_benchmarks.models import DatasetProvenance, RunConfig
 from basic_memory_benchmarks.reporting.compare import compare_provider_metric, load_retrieval_summary
-from basic_memory_benchmarks.runner import run_judge, run_retrieval
+from basic_memory_benchmarks.runner import run_judge, run_qa_stage, run_retrieval
 from basic_memory_benchmarks.utils import sha256_file
 
 app = typer.Typer(help="Basic Memory benchmark suite")
@@ -108,6 +108,31 @@ def run_retrieval_command(
 
     run_dir = run_retrieval(run_config=config, dataset=provenance)
     console.print(f"Retrieval run complete: [green]{run_dir}[/green]")
+
+
+@run_app.command("qa")
+def run_qa_command(
+    run_dir: Path = typer.Option(..., "--run-dir"),
+    answerer: str = typer.Option(
+        "claude:claude-haiku-4-5",
+        "--answerer",
+        help="Runner spec: claude:<model> or openai-compat:<model>@<base_url>",
+    ),
+    judge: str = typer.Option(
+        "claude:claude-sonnet-4-6",
+        "--judge",
+        help="Runner spec: claude:<model> or openai-compat:<model>@<base_url>",
+    ),
+    max_workers: int = typer.Option(4, "--max-workers"),
+) -> None:
+    out = run_qa_stage(
+        run_dir=run_dir,
+        answerer_spec=answerer,
+        judge_spec=judge,
+        max_workers=max_workers,
+    )
+    console.print(f"QA run complete: [green]{out}[/green]")
+    console.print(f"See [cyan]{out / 'qa-summary.json'}[/cyan]")
 
 
 @run_app.command("judge")

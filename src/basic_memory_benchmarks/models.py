@@ -96,6 +96,46 @@ class JudgeSummary(BaseModel):
     skipped_reason: str | None = None
 
 
+class QACategoryMetrics(BaseModel):
+    total: int = 0
+    correct: int = 0
+    accuracy: float = 0.0
+
+
+class QACaseResult(BaseModel):
+    provider: str
+    query_id: str
+    category: str
+    question: str
+    expected_answer: str
+    generated_answer: str
+    abstained: bool
+    correct: bool
+    judge_reason: str
+    answer_model: str
+    judge_model: str
+    answer_latency_ms: float
+    answer_input_tokens: int
+    answer_output_tokens: int
+    error: str | None = None
+
+
+class QASummary(BaseModel):
+    provider: str
+    answer_model: str
+    judge_model: str
+    total_cases: int
+    correct_count: int
+    error_count: int = 0
+    abstain_count: int = 0
+    accuracy: float
+    by_category: dict[str, QACategoryMetrics] = Field(default_factory=dict)
+    mean_answer_latency_ms: float = 0.0
+    total_answer_input_tokens: int = 0
+    total_answer_output_tokens: int = 0
+    skipped_reason: str | None = None
+
+
 class ProviderStatus(BaseModel):
     provider: str
     state: PROVIDER_STATE

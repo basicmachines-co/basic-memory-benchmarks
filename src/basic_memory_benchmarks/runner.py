@@ -147,6 +147,70 @@ def run_retrieval(
     return run_dir
 
 
+def _load_retrieval_rows(run_dir: Path) -> list[PerQueryRetrievalResult]:
+    retrieval_path = run_dir / "per-query-retrieval.jsonl"
+    if not retrieval_path.exists():
+        raise FileNotFoundError(f"Missing retrieval artifact: {retrieval_path}")
+    rows: list[PerQueryRetrievalResult] = []
+    with retrieval_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                rows.append(PerQueryRetrievalResult.model_validate(json.loads(line)))
+    return rows
+
+
+def run_qa_stage(
+    *,
+    run_dir: Path,
+    answerer_spec: str,
+    judge_spec: str,
+    max_workers: int = 4,
+) -> Path:
+    """Generate answers from each provider's retrieved context and judge them.
+
+    Reads per-query-retrieval.jsonl, writes per-query-qa.jsonl and
+    qa-summary.json into the same run directory.
+    """
+    from basic_memory_benchmarks.llm.runners import create_runner
+    from basic_memory_benchmarks.scoring.qa import run_qa
+
+    answerer = create_runner(answerer_spec)
+    judge = create_runner(judge_spec)
+
+    grouped: dict[str, list[PerQueryRetrievalResult]] = {}
+    for row in _load_retrieval_rows(run_dir):
+        grouped.setdefault(row.provider, []).append(row)
+
+    qa_rows = []
+    qa_summaries = []
+    for provider, provider_rows in grouped.items():
+        provider_cases, provider_summary = run_qa(
+            provider_rows,
+            provider=provider,
+            answerer=answerer,
+            judge=judge,
+            max_workers=max_workers,
+        )
+        qa_rows.extend(provider_cases)
+        qa_summaries.append(provider_summary)
+
+    qa_jsonl = run_dir / "per-query-qa.jsonl"
+    with qa_jsonl.open("w", encoding="utf-8") as file:
+        for row in qa_rows:
+            file.write(json.dumps(row.model_dump(mode="json"), sort_keys=True) + "\n")
+
+    qa_summary_path = run_dir / "qa-summary.json"
+    qa_summary_path.write_text(
+        json.dumps(
+            {"providers": [item.model_dump(mode="json") for item in qa_summaries]},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return run_dir
+
+
 def run_judge(
     *,
     run_dir: Path,
