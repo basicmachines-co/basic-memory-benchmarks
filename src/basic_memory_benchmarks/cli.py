@@ -10,9 +10,17 @@ import typer
 from rich.console import Console
 
 from basic_memory_benchmarks.converters.locomo_to_corpus import convert_locomo_to_corpus
+from basic_memory_benchmarks.converters.longmemeval_to_corpus import convert_longmemeval_to_corpus
 from basic_memory_benchmarks.datasets.locomo import LOCOMO_URL, fetch_locomo_dataset
+from basic_memory_benchmarks.datasets.longmemeval import (
+    LONGMEMEVAL_S_URL,
+    fetch_longmemeval_dataset,
+)
 from basic_memory_benchmarks.models import DatasetProvenance, RunConfig
-from basic_memory_benchmarks.reporting.compare import compare_provider_metric, load_retrieval_summary
+from basic_memory_benchmarks.reporting.compare import (
+    compare_provider_metric,
+    load_retrieval_summary,
+)
 from basic_memory_benchmarks.runner import run_judge, run_qa_stage, run_retrieval
 from basic_memory_benchmarks.utils import sha256_file
 
@@ -31,20 +39,29 @@ app.add_typer(run_app, name="run")
 @datasets_app.command("fetch")
 def datasets_fetch(
     dataset: str = typer.Option("locomo", "--dataset"),
-    output: Path = typer.Option(Path("benchmarks/datasets/locomo/locomo10.json"), "--output"),
-    url: str = typer.Option(LOCOMO_URL, "--url"),
+    output: Path | None = typer.Option(None, "--output"),
+    url: str | None = typer.Option(None, "--url"),
 ) -> None:
-    if dataset != "locomo":
-        raise typer.BadParameter("Only locomo is supported in v1")
+    if dataset == "locomo":
+        resolved_output = output or Path("benchmarks/datasets/locomo/locomo10.json")
+        provenance = fetch_locomo_dataset(output_path=resolved_output, url=url or LOCOMO_URL)
+    elif dataset == "longmemeval-s":
+        resolved_output = output or Path("benchmarks/datasets/longmemeval/longmemeval_s.json")
+        provenance = fetch_longmemeval_dataset(
+            output_path=resolved_output, url=url or LONGMEMEVAL_S_URL
+        )
+    else:
+        raise typer.BadParameter("Supported datasets: locomo, longmemeval-s")
 
-    provenance = fetch_locomo_dataset(output_path=output, url=url)
-    console.print(f"Downloaded {dataset} to [cyan]{output}[/cyan]")
+    console.print(f"Downloaded {dataset} to [cyan]{resolved_output}[/cyan]")
     console.print(f"SHA256: [green]{provenance.checksum_sha256}[/green]")
 
 
 @convert_app.command("locomo")
 def convert_locomo(
-    dataset_path: Path = typer.Option(Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"),
+    dataset_path: Path = typer.Option(
+        Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"
+    ),
     output_dir: Path = typer.Option(Path("benchmarks/generated/locomo"), "--output-dir"),
     max_conversations: int | None = typer.Option(None, "--max-conversations"),
 ) -> None:
@@ -57,13 +74,34 @@ def convert_locomo(
     console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
 
 
+@convert_app.command("longmemeval")
+def convert_longmemeval(
+    dataset_path: Path = typer.Option(
+        Path("benchmarks/datasets/longmemeval/longmemeval_s.json"), "--dataset-path"
+    ),
+    output_dir: Path = typer.Option(Path("benchmarks/generated/longmemeval-s"), "--output-dir"),
+    max_questions: int | None = typer.Option(None, "--max-questions"),
+) -> None:
+    groups_dir, queries_path, doc_count, query_count = convert_longmemeval_to_corpus(
+        dataset_path=dataset_path,
+        output_dir=output_dir,
+        max_questions=max_questions,
+    )
+    console.print(f"Groups: [cyan]{groups_dir}[/cyan] ({query_count} groups, {doc_count} docs)")
+    console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
+
+
 @run_app.command("retrieval")
 def run_retrieval_command(
     providers: str = typer.Option("bm-local,mem0-local", "--providers"),
     dataset_id: str = typer.Option("locomo", "--dataset-id"),
-    dataset_path: Path = typer.Option(Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"),
+    dataset_path: Path = typer.Option(
+        Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"
+    ),
     corpus_dir: Path = typer.Option(Path("benchmarks/generated/locomo/docs"), "--corpus-dir"),
-    queries_path: Path = typer.Option(Path("benchmarks/generated/locomo/queries.json"), "--queries-path"),
+    queries_path: Path = typer.Option(
+        Path("benchmarks/generated/locomo/queries.json"), "--queries-path"
+    ),
     output_root: Path = typer.Option(Path("benchmarks/runs"), "--output-root"),
     run_id: str | None = typer.Option(None, "--run-id"),
     top_k: int = typer.Option(10, "--top-k"),
@@ -148,9 +186,13 @@ def run_judge_command(
 def run_full_command(
     providers: str = typer.Option("bm-local,mem0-local", "--providers"),
     dataset_id: str = typer.Option("locomo", "--dataset-id"),
-    dataset_path: Path = typer.Option(Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"),
+    dataset_path: Path = typer.Option(
+        Path("benchmarks/datasets/locomo/locomo10.json"), "--dataset-path"
+    ),
     corpus_dir: Path = typer.Option(Path("benchmarks/generated/locomo/docs"), "--corpus-dir"),
-    queries_path: Path = typer.Option(Path("benchmarks/generated/locomo/queries.json"), "--queries-path"),
+    queries_path: Path = typer.Option(
+        Path("benchmarks/generated/locomo/queries.json"), "--queries-path"
+    ),
     output_root: Path = typer.Option(Path("benchmarks/runs"), "--output-root"),
     run_id: str | None = typer.Option(None, "--run-id"),
     top_k: int = typer.Option(10, "--top-k"),

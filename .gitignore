@@ -16,3 +16,5 @@ benchmarks/datasets/locomo/locomo10.json
 benchmarks/datasets/locomo/locomo10.provenance.json
 .env
 benchmarks/bm-home/
+benchmarks/datasets/longmemeval/longmemeval_s.json
+benchmarks/datasets/longmemeval/longmemeval_s.provenance.json

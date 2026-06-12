@@ -9,6 +9,9 @@ bm_local_path_flag := if bm_local_path != "" { "--bm-local-path " + bm_local_pat
 locomo_dataset_path := "benchmarks/datasets/locomo/locomo10.json"
 locomo_output_dir := "benchmarks/generated/locomo"
 locomo_c1_output_dir := "benchmarks/generated/locomo-c1"
+longmemeval_dataset_path := "benchmarks/datasets/longmemeval/longmemeval_s.json"
+longmemeval_output_dir := "benchmarks/generated/longmemeval-s"
+longmemeval_dev_output_dir := "benchmarks/generated/longmemeval-s-dev"
 
 # --- Repo maintenance ---
 
@@ -49,6 +52,40 @@ bench-make-quick25:
 bench-prepare-short: bench-fetch-locomo bench-convert-locomo-c1 bench-make-quick25
 
 bench-prepare-long: bench-fetch-locomo bench-convert-locomo
+
+bench-fetch-longmemeval:
+    uv run bm-bench datasets fetch --dataset longmemeval-s --output {{longmemeval_dataset_path}}
+
+bench-convert-longmemeval:
+    uv run bm-bench convert longmemeval --dataset-path {{longmemeval_dataset_path}} --output-dir {{longmemeval_output_dir}}
+
+# Dev slice: first 25 questions for fast iteration
+bench-convert-longmemeval-dev:
+    uv run bm-bench convert longmemeval --dataset-path {{longmemeval_dataset_path}} --output-dir {{longmemeval_dev_output_dir}} --max-questions 25
+
+bench-prepare-longmemeval: bench-fetch-longmemeval bench-convert-longmemeval
+
+# Grouped retrieval over the LongMemEval-S dev slice (bm-local only)
+bench-run-longmemeval-dev:
+    uv run bm-bench run retrieval \
+      --dataset-id longmemeval_s \
+      --dataset-path {{longmemeval_dataset_path}} \
+      --corpus-dir {{longmemeval_dev_output_dir}}/groups \
+      --queries-path {{longmemeval_dev_output_dir}}/queries.json \
+      --providers bm-local \
+      {{bm_local_path_flag}} \
+      --strict-providers
+
+# Grouped retrieval over full LongMemEval-S (slow: 500 isolated group corpora)
+bench-run-longmemeval:
+    uv run bm-bench run retrieval \
+      --dataset-id longmemeval_s \
+      --dataset-path {{longmemeval_dataset_path}} \
+      --corpus-dir {{longmemeval_output_dir}}/groups \
+      --queries-path {{longmemeval_output_dir}}/queries.json \
+      --providers bm-local,mem0-local \
+      {{bm_local_path_flag}} \
+      --allow-provider-skip
 
 # --- One-command pipelines ---
 

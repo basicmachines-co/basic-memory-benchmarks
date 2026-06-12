@@ -98,6 +98,30 @@ uv run bm-bench run judge --run-dir benchmarks/runs/<run-id>
 uv run bm-bench publish --run-dir benchmarks/runs/<run-id>
 ```
 
+## LongMemEval-S
+
+LongMemEval (Wu et al., ICLR 2025) gives each of its 500 questions an
+independent haystack of ~50 chat sessions, so it runs in **grouped mode**: the
+converter writes one corpus per question under `groups/<question_id>/docs`,
+and the runner ingests + queries each group in isolation (fresh provider
+instance, group-suffixed run id namespacing the BM project / mem0 user).
+
+```bash
+just bench-prepare-longmemeval        # fetch (~278MB) + convert all 500
+just bench-convert-longmemeval-dev    # or: 25-question dev slice
+just bench-run-longmemeval-dev        # grouped retrieval, bm-local
+```
+
+Then score answers with the QA stage as usual (`run qa --run-dir ...`). The
+question's ask-date is carried in query metadata and appended to the question
+for both the answerer and the judge — temporal-reasoning questions are
+unanswerable without it.
+
+Anti-leakage: the raw dataset marks evidence sessions via an `answer_`
+session-id prefix and per-turn `has_answer` flags. The converter remaps all
+session ids to neutral positional ids (`<qid>-s012`) and drops turn flags, so
+ingested corpora carry no evidence markers.
+
 ## Basic Memory source policy
 
 By default this project tracks Basic Memory from `main`.
