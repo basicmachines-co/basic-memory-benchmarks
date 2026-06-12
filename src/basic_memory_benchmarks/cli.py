@@ -102,11 +102,17 @@ def convert_longmemeval(
     ),
     output_dir: Path = typer.Option(Path("benchmarks/generated/longmemeval-s"), "--output-dir"),
     max_questions: int | None = typer.Option(None, "--max-questions"),
+    stratified: bool = typer.Option(
+        False, "--stratified", help="Sample max-questions evenly across question types (seed 42)"
+    ),
+    seed: int = typer.Option(42, "--seed"),
 ) -> None:
     groups_dir, queries_path, doc_count, query_count = convert_longmemeval_to_corpus(
         dataset_path=dataset_path,
         output_dir=output_dir,
         max_questions=max_questions,
+        stratified=stratified,
+        seed=seed,
     )
     console.print(f"Groups: [cyan]{groups_dir}[/cyan] ({query_count} groups, {doc_count} docs)")
     console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
