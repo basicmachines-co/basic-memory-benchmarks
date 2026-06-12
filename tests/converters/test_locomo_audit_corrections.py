@@ -127,3 +127,29 @@ class TestLoadCorrections:
         path.write_text(json.dumps([{"question_id": "locomo_0_qa1"}]), encoding="utf-8")
         with pytest.raises(ValueError, match="missing keys"):
             load_locomo_corrections(path)
+
+
+class TestSessionDates:
+    def test_session_date_in_doc(self, tmp_path):
+        blob = _locomo_blob()
+        blob[0]["conversation"]["session_1_date_time"] = "1:56 pm on 8 May, 2023"
+        dataset = tmp_path / "locomo10.json"
+        dataset.write_text(json.dumps(blob), encoding="utf-8")
+
+        docs_dir, _, _, _ = convert_locomo_to_corpus(
+            dataset_path=dataset, output_dir=tmp_path / "out"
+        )
+        doc = (docs_dir / "locomo-c00-s01.md").read_text()
+        assert "session_date: 1:56 pm on 8 May, 2023" in doc
+        assert "# Chat session at 1:56 pm on 8 May, 2023" in doc
+        assert "title: locomo-c00-s01 (1:56 pm on 8 May, 2023)" in doc
+
+    def test_missing_date_keeps_plain_heading(self, tmp_path):
+        dataset = tmp_path / "locomo10.json"
+        dataset.write_text(json.dumps(_locomo_blob()), encoding="utf-8")
+        docs_dir, _, _, _ = convert_locomo_to_corpus(
+            dataset_path=dataset, output_dir=tmp_path / "out"
+        )
+        doc = (docs_dir / "locomo-c00-s01.md").read_text()
+        assert "session_date:" not in doc
+        assert "# locomo-c00-s01" in doc

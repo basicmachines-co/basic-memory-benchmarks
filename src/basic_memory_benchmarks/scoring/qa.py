@@ -19,7 +19,16 @@ from basic_memory_benchmarks.models import (
     QACaseResult,
     QACategoryMetrics,
     QASummary,
+    SearchHit,
 )
+
+# Context assembly budget. Multi-fact answers (LoCoMo multi_hop, LongMemEval
+# multi-session) need material from several hits; the previous top-5
+# matched-chunk join (~1K chars) capped every provider near zero on those
+# categories despite ~0.8 retrieval recall.
+CONTEXT_MAX_HITS = 10
+CONTEXT_MAX_CHARS = 12_000
+CONTEXT_CHARS_PER_HIT = 2_500
 
 # The exact abstention sentinel the answer prompt requests. Judged correct only
 # when the gold answer itself indicates the question is unanswerable (e.g.
@@ -104,6 +113,43 @@ def _is_abstention(answer: str) -> bool:
     return normalized == ABSTAIN_SENTINEL.strip(".").lower()
 
 
+def assemble_context(hits: list[SearchHit]) -> str:
+    """Build answering context from ranked hits under a character budget.
+
+    Hits are taken in rank order; each contributes up to CONTEXT_CHARS_PER_HIT
+    characters and the total is capped at CONTEXT_MAX_CHARS. Sections are
+    numbered with their source doc so the answerer can ground multi-fact
+    answers across memories. Identical assembly for every provider.
+    """
+    sections: list[str] = []
+    used = 0
+    for rank, hit in enumerate(hits[:CONTEXT_MAX_HITS], start=1):
+        text = (hit.text or "").strip()
+        if not text:
+            continue
+        snippet = text[:CONTEXT_CHARS_PER_HIT]
+        if used + len(snippet) > CONTEXT_MAX_CHARS:
+            snippet = snippet[: CONTEXT_MAX_CHARS - used]
+            if not snippet:
+                break
+        source = hit.source_doc_id or hit.source_path or "unknown"
+        sections.append(f"[Memory {rank} | source: {source}]\n{snippet}")
+        used += len(snippet)
+        if used >= CONTEXT_MAX_CHARS:
+            break
+    return "\n\n".join(sections)
+
+
+def _row_context(row: PerQueryRetrievalResult) -> str:
+    # Prefer assembling from stored hits (richer, budget-controlled); fall
+    # back to the legacy pre-joined context for old artifacts without hits.
+    if row.hits:
+        assembled = assemble_context(row.hits)
+        if assembled:
+            return assembled
+    return row.retrieved_context
+
+
 def _question_display(row: PerQueryRetrievalResult) -> str:
     """Render the question with its ask-date when the dataset provides one.
 
@@ -125,7 +171,7 @@ def _score_case(
 ) -> QACaseResult:
     question = _question_display(row)
     try:
-        answer_result = answerer.complete(build_answer_prompt(question, row.retrieved_context))
+        answer_result = answerer.complete(build_answer_prompt(question, _row_context(row)))
         judge_result = judge.complete(
             build_judge_prompt(question, row.expected_answer or "", answer_result.text)
         )

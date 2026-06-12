@@ -239,3 +239,66 @@ class TestQuestionDate:
         run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
 
         assert "question asked on" not in answerer.prompts[0]
+
+
+class TestAssembleContext:
+    def _hit(self, doc_id: str, text: str):
+        from basic_memory_benchmarks.models import SearchHit
+
+        return SearchHit(source_doc_id=doc_id, text=text, score=1.0)
+
+    def test_sections_numbered_with_source(self):
+        from basic_memory_benchmarks.scoring.qa import assemble_context
+
+        ctx = assemble_context(
+            [self._hit("doc-a", "alpha facts"), self._hit("doc-b", "beta facts")]
+        )
+        assert "[Memory 1 | source: doc-a]" in ctx
+        assert "alpha facts" in ctx
+        assert "[Memory 2 | source: doc-b]" in ctx
+
+    def test_budget_caps_total(self):
+        from basic_memory_benchmarks.scoring.qa import CONTEXT_MAX_CHARS, assemble_context
+
+        hits = [self._hit(f"doc-{i}", "x" * 3000) for i in range(10)]
+        ctx = assemble_context(hits)
+        # Section text alone stays within the global budget (headers excluded).
+        text_chars = sum(len(part.split("]\n", 1)[1]) for part in ctx.split("\n\n"))
+        assert text_chars <= CONTEXT_MAX_CHARS
+
+    def test_per_hit_cap(self):
+        from basic_memory_benchmarks.scoring.qa import CONTEXT_CHARS_PER_HIT, assemble_context
+
+        ctx = assemble_context([self._hit("doc-a", "z" * (CONTEXT_CHARS_PER_HIT + 500))])
+        assert ctx.count("z") == CONTEXT_CHARS_PER_HIT
+
+    def test_empty_hits_skipped(self):
+        from basic_memory_benchmarks.scoring.qa import assemble_context
+
+        ctx = assemble_context([self._hit("doc-a", ""), self._hit("doc-b", "real")])
+        assert "[Memory 2 | source: doc-b]" in ctx
+        assert "doc-a" not in ctx
+
+    def test_qa_uses_assembled_context(self):
+        from basic_memory_benchmarks.models import SearchHit
+
+        row = _row("q1", "Where does Joanna live?", "Austin", "legacy joined context")
+        row = row.model_copy(
+            update={
+                "hits": [
+                    SearchHit(source_doc_id="doc-a", text="Joanna lives in Austin.", score=1.0)
+                ]
+            }
+        )
+        answerer = FakeRunner({}, default="Austin")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+        run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
+        assert "[Memory 1 | source: doc-a]" in answerer.prompts[0]
+        assert "legacy joined context" not in answerer.prompts[0]
+
+    def test_fallback_to_legacy_context_without_hits(self):
+        row = _row("q1", "Where does Joanna live?", "Austin", "legacy joined context")
+        answerer = FakeRunner({}, default="Austin")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+        run_qa([row], provider="bm-local", answerer=answerer, judge=judge, max_workers=1)
+        assert "legacy joined context" in answerer.prompts[0]
