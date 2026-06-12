@@ -144,6 +144,31 @@ session-id prefix and per-turn `has_answer` flags. The converter remaps all
 session ids to neutral positional ids (`<qid>-s012`) and drops turn flags, so
 ingested corpora carry no evidence markers.
 
+## ConvoMem (sampled)
+
+ConvoMem (Salesforce, Apache-2.0) ships ~75K QA pairs as pre-mixed test cases
+— each a self-contained haystack of conversations plus questions — which map
+1:1 onto grouped mode. The full dataset is multi-GB, so fetching is selective:
+batch files are indexed with cheap HTTP Range tail-probes and only files
+matching the requested context sizes are downloaded. The probe index
+(`index.json`) records every file including the ones not downloaded, so the
+selection is auditable.
+
+```bash
+uv run bm-bench datasets fetch --dataset convomem --context-sizes 10,30
+uv run bm-bench convert convomem --sample-per-stratum 25 --seed 42
+```
+
+Sampling is stratified by (category, contextSize) with a fixed seed;
+`sampling.json` records the seed, per-stratum population, and sample counts —
+a published number states exactly which slice of ConvoMem it covers. Note
+`--sample-per-stratum` counts *cases* (haystacks); larger-context cases carry
+multiple questions each, all sharing one ingested group corpus.
+
+Anti-leakage: raw conversations carry `containsEvidence`/`model_name` fields;
+rendered docs include neither and conversation ids are remapped to neutral
+positional ids.
+
 ## Basic Memory source policy
 
 By default this project tracks Basic Memory from `main`.
