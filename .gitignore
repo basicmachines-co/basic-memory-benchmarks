@@ -20,3 +20,4 @@ benchmarks/datasets/longmemeval/longmemeval_s.json
 benchmarks/datasets/longmemeval/longmemeval_s.provenance.json
 benchmarks/datasets/locomo-audit/
 benchmarks/.mem0-qdrant/
+benchmarks/datasets/convomem/

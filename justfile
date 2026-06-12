@@ -65,6 +65,14 @@ bench-convert-longmemeval-dev:
 
 bench-prepare-longmemeval: bench-fetch-longmemeval bench-convert-longmemeval
 
+bench-fetch-convomem:
+    uv run bm-bench datasets fetch --dataset convomem --context-sizes 10,30
+
+bench-convert-convomem:
+    uv run bm-bench convert convomem --sample-per-stratum 25 --seed 42
+
+bench-prepare-convomem: bench-fetch-convomem bench-convert-convomem
+
 bench-fetch-locomo-audit:
     uv run bm-bench datasets fetch --dataset locomo-audit
 

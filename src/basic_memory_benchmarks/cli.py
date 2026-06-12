@@ -12,6 +12,8 @@ from rich.console import Console
 from basic_memory_benchmarks.converters.locomo_to_corpus import convert_locomo_to_corpus
 from basic_memory_benchmarks.converters.longmemeval_to_corpus import convert_longmemeval_to_corpus
 from basic_memory_benchmarks.datasets.locomo import LOCOMO_URL, fetch_locomo_dataset
+from basic_memory_benchmarks.converters.convomem_to_corpus import convert_convomem_to_corpus
+from basic_memory_benchmarks.datasets.convomem import fetch_convomem_batches
 from basic_memory_benchmarks.datasets.locomo_audit import fetch_locomo_audit_corrections
 from basic_memory_benchmarks.datasets.longmemeval import (
     LONGMEMEVAL_S_URL,
@@ -42,6 +44,9 @@ def datasets_fetch(
     dataset: str = typer.Option("locomo", "--dataset"),
     output: Path | None = typer.Option(None, "--output"),
     url: str | None = typer.Option(None, "--url"),
+    context_sizes: str = typer.Option(
+        "10,30", "--context-sizes", help="convomem only: batch context sizes to download"
+    ),
 ) -> None:
     if dataset == "locomo":
         resolved_output = output or Path("benchmarks/datasets/locomo/locomo10.json")
@@ -54,8 +59,14 @@ def datasets_fetch(
     elif dataset == "locomo-audit":
         resolved_output = output or Path("benchmarks/datasets/locomo-audit/corrections.json")
         provenance = fetch_locomo_audit_corrections(output_path=resolved_output)
+    elif dataset == "convomem":
+        resolved_output = output or Path("benchmarks/datasets/convomem")
+        sizes = tuple(int(s.strip()) for s in context_sizes.split(",") if s.strip())
+        provenance = fetch_convomem_batches(output_dir=resolved_output, context_sizes=sizes)
     else:
-        raise typer.BadParameter("Supported datasets: locomo, longmemeval-s, locomo-audit")
+        raise typer.BadParameter(
+            "Supported datasets: locomo, longmemeval-s, locomo-audit, convomem"
+        )
 
     console.print(f"Downloaded {dataset} to [cyan]{resolved_output}[/cyan]")
     console.print(f"SHA256: [green]{provenance.checksum_sha256}[/green]")
@@ -99,6 +110,27 @@ def convert_longmemeval(
     )
     console.print(f"Groups: [cyan]{groups_dir}[/cyan] ({query_count} groups, {doc_count} docs)")
     console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
+
+
+@convert_app.command("convomem")
+def convert_convomem(
+    batches_dir: Path = typer.Option(Path("benchmarks/datasets/convomem"), "--batches-dir"),
+    output_dir: Path = typer.Option(Path("benchmarks/generated/convomem"), "--output-dir"),
+    sample_per_stratum: int = typer.Option(25, "--sample-per-stratum"),
+    seed: int = typer.Option(42, "--seed"),
+    context_sizes: str = typer.Option("10,30", "--context-sizes"),
+) -> None:
+    sizes = tuple(int(s.strip()) for s in context_sizes.split(",") if s.strip())
+    groups_dir, queries_path, doc_count, query_count = convert_convomem_to_corpus(
+        batches_dir=batches_dir,
+        output_dir=output_dir,
+        sample_per_stratum=sample_per_stratum,
+        seed=seed,
+        context_sizes=sizes,
+    )
+    console.print(f"Groups: [cyan]{groups_dir}[/cyan] ({doc_count} docs)")
+    console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
+    console.print(f"Sampling manifest: [cyan]{output_dir / 'sampling.json'}[/cyan]")
 
 
 @run_app.command("retrieval")
