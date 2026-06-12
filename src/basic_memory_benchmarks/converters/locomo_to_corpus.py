@@ -79,18 +79,28 @@ def convert_locomo_to_corpus(
             doc_id = f"{conv_id}-s{session_num:02d}"
             session_doc_id[session_num] = doc_id
             turns = blob.get(session_key, [])
+            # The session timestamp is the anchor for every relative time
+            # expression in the dialogue ("yesterday", "last Saturday").
+            # Without it in the doc, date questions are unanswerable by any
+            # provider — LoCoMo multi_hop/temporal collapse to abstention.
+            session_date = str(blob.get(f"{session_key}_date_time", "")).strip()
+            date_suffix = f" ({session_date})" if session_date else ""
 
             lines: list[str] = [
                 "---",
-                f"title: {doc_id}",
+                f"title: {doc_id}{date_suffix}",
                 "type: note",
                 f"source_doc_id: {doc_id}",
                 "dataset_id: locomo",
                 f"conversation_id: {conv_id}",
                 f"session_number: {session_num}",
+            ]
+            if session_date:
+                lines.append(f"session_date: {session_date}")
+            lines += [
                 "---",
                 "",
-                f"# {doc_id}",
+                f"# Chat session at {session_date}" if session_date else f"# {doc_id}",
                 "",
                 "## Conversation",
             ]
