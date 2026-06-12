@@ -113,38 +113,45 @@ def _is_abstention(answer: str) -> bool:
     return normalized == ABSTAIN_SENTINEL.strip(".").lower()
 
 
-def assemble_context(hits: list[SearchHit]) -> str:
+def assemble_context(hits: list[SearchHit], max_chars: int = CONTEXT_MAX_CHARS) -> str:
     """Build answering context from ranked hits under a character budget.
 
-    Hits are taken in rank order; each contributes up to CONTEXT_CHARS_PER_HIT
-    characters and the total is capped at CONTEXT_MAX_CHARS. Sections are
-    numbered with their source doc so the answerer can ground multi-fact
-    answers across memories. Identical assembly for every provider.
+    Hits are taken in rank order under a total budget of ``max_chars``. The
+    per-hit cap is the larger of CONTEXT_CHARS_PER_HIT and an even split of
+    the budget across available hits, so a single-hit provider (the
+    full-context baseline) can use the whole budget rather than being
+    truncated to one hit-slice. Sections are numbered with their source doc
+    so the answerer can ground multi-fact answers across memories. Identical
+    assembly for every provider in a run.
     """
+    take = hits[:CONTEXT_MAX_HITS]
+    if not take:
+        return ""
+    per_hit_cap = max(CONTEXT_CHARS_PER_HIT, max_chars // len(take))
     sections: list[str] = []
     used = 0
-    for rank, hit in enumerate(hits[:CONTEXT_MAX_HITS], start=1):
+    for rank, hit in enumerate(take, start=1):
         text = (hit.text or "").strip()
         if not text:
             continue
-        snippet = text[:CONTEXT_CHARS_PER_HIT]
-        if used + len(snippet) > CONTEXT_MAX_CHARS:
-            snippet = snippet[: CONTEXT_MAX_CHARS - used]
+        snippet = text[:per_hit_cap]
+        if used + len(snippet) > max_chars:
+            snippet = snippet[: max_chars - used]
             if not snippet:
                 break
         source = hit.source_doc_id or hit.source_path or "unknown"
         sections.append(f"[Memory {rank} | source: {source}]\n{snippet}")
         used += len(snippet)
-        if used >= CONTEXT_MAX_CHARS:
+        if used >= max_chars:
             break
     return "\n\n".join(sections)
 
 
-def _row_context(row: PerQueryRetrievalResult) -> str:
+def _row_context(row: PerQueryRetrievalResult, max_context_chars: int) -> str:
     # Prefer assembling from stored hits (richer, budget-controlled); fall
     # back to the legacy pre-joined context for old artifacts without hits.
     if row.hits:
-        assembled = assemble_context(row.hits)
+        assembled = assemble_context(row.hits, max_chars=max_context_chars)
         if assembled:
             return assembled
     return row.retrieved_context
@@ -168,9 +175,10 @@ def _score_case(
     provider: str,
     answerer: LLMRunner,
     judge: LLMRunner,
+    max_context_chars: int = CONTEXT_MAX_CHARS,
 ) -> QACaseResult:
     question = _question_display(row)
-    answer_prompt = build_answer_prompt(question, _row_context(row))
+    answer_prompt = build_answer_prompt(question, _row_context(row, max_context_chars))
     try:
         answer_result = answerer.complete(answer_prompt)
         judge_result = judge.complete(
@@ -222,6 +230,7 @@ def run_qa(
     answerer: LLMRunner,
     judge: LLMRunner,
     max_workers: int = 4,
+    max_context_chars: int = CONTEXT_MAX_CHARS,
 ) -> tuple[list[QACaseResult], QASummary]:
     """Answer and judge every row that carries an expected answer."""
     scorable = [row for row in rows if row.expected_answer]
@@ -240,7 +249,10 @@ def run_qa(
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         case_results = list(
-            pool.map(lambda row: _score_case(row, provider, answerer, judge), scorable)
+            pool.map(
+                lambda row: _score_case(row, provider, answerer, judge, max_context_chars),
+                scorable,
+            )
         )
 
     by_category: dict[str, QACategoryMetrics] = {}

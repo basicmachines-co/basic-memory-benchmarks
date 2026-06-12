@@ -266,11 +266,15 @@ class TestAssembleContext:
         text_chars = sum(len(part.split("]\n", 1)[1]) for part in ctx.split("\n\n"))
         assert text_chars <= CONTEXT_MAX_CHARS
 
-    def test_per_hit_cap(self):
+    def test_per_hit_cap_with_many_hits(self):
         from basic_memory_benchmarks.scoring.qa import CONTEXT_CHARS_PER_HIT, assemble_context
 
-        ctx = assemble_context([self._hit("doc-a", "z" * (CONTEXT_CHARS_PER_HIT + 500))])
-        assert ctx.count("z") == CONTEXT_CHARS_PER_HIT
+        # With a full hit list the per-hit cap is the slice constant; a lone
+        # hit instead gets the whole budget (see TestContextBudgetOverride).
+        hits = [self._hit(f"doc-{i}", "z" * (CONTEXT_CHARS_PER_HIT + 500)) for i in range(10)]
+        ctx = assemble_context(hits)
+        first_section = ctx.split("\n\n")[0]
+        assert first_section.count("z") == CONTEXT_CHARS_PER_HIT
 
     def test_empty_hits_skipped(self):
         from basic_memory_benchmarks.scoring.qa import assemble_context
@@ -312,3 +316,37 @@ class TestPromptCharsAccounting:
         cases, summary = run_qa(rows, provider="bm-local", answerer=answerer, judge=judge)
         assert cases[0].answer_prompt_chars == len(answerer.prompts[0])
         assert summary.mean_answer_prompt_chars == cases[0].answer_prompt_chars
+
+
+class TestContextBudgetOverride:
+    def _hit(self, doc_id: str, text: str):
+        from basic_memory_benchmarks.models import SearchHit
+
+        return SearchHit(source_doc_id=doc_id, text=text, score=1.0)
+
+    def test_single_hit_uses_full_budget(self):
+        from basic_memory_benchmarks.scoring.qa import assemble_context
+
+        # One massive hit (full-context baseline) gets the whole budget,
+        # not the per-hit slice.
+        ctx = assemble_context([self._hit("all", "z" * 50_000)], max_chars=40_000)
+        assert ctx.count("z") == 40_000
+
+    def test_budget_override_flows_through_run_qa(self):
+        from basic_memory_benchmarks.models import SearchHit
+
+        row = _row("q1", "Q?", "A", "legacy")
+        row = row.model_copy(
+            update={"hits": [SearchHit(source_doc_id="all", text="z" * 50_000, score=1.0)]}
+        )
+        answerer = FakeRunner({}, default="answer")
+        judge = FakeRunner({}, default='{"correct": true, "reason": "ok"}')
+        run_qa(
+            [row],
+            provider="p",
+            answerer=answerer,
+            judge=judge,
+            max_workers=1,
+            max_context_chars=30_000,
+        )
+        assert answerer.prompts[0].count("z") == 30_000

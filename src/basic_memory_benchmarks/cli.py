@@ -204,12 +204,18 @@ def run_qa_command(
         help="Runner spec: claude:<model> or openai-compat:<model>@<base_url>",
     ),
     max_workers: int = typer.Option(4, "--max-workers"),
+    max_context_chars: int | None = typer.Option(
+        None,
+        "--max-context-chars",
+        help="Override the assembled-context budget (default 12000). Use a large value for full-context baselines.",
+    ),
 ) -> None:
     out = run_qa_stage(
         run_dir=run_dir,
         answerer_spec=answerer,
         judge_spec=judge,
         max_workers=max_workers,
+        max_context_chars=max_context_chars,
     )
     console.print(f"QA run complete: [green]{out}[/green]")
     console.print(f"See [cyan]{out / 'qa-summary.json'}[/cyan]")

@@ -299,6 +299,7 @@ def run_qa_stage(
     answerer_spec: str,
     judge_spec: str,
     max_workers: int = 4,
+    max_context_chars: int | None = None,
 ) -> Path:
     """Generate answers from each provider's retrieved context and judge them.
 
@@ -306,7 +307,7 @@ def run_qa_stage(
     qa-summary.json into the same run directory.
     """
     from basic_memory_benchmarks.llm.runners import create_runner
-    from basic_memory_benchmarks.scoring.qa import run_qa
+    from basic_memory_benchmarks.scoring.qa import CONTEXT_MAX_CHARS, run_qa
 
     answerer = create_runner(answerer_spec)
     judge = create_runner(judge_spec)
@@ -324,6 +325,7 @@ def run_qa_stage(
             answerer=answerer,
             judge=judge,
             max_workers=max_workers,
+            max_context_chars=max_context_chars or CONTEXT_MAX_CHARS,
         )
         qa_rows.extend(provider_cases)
         qa_summaries.append(provider_summary)
