@@ -107,7 +107,42 @@ vs main). The title fix is harness-side and provider-faithful — it uses data
 BM already returns. A product follow-up could fold the parent heading/date
 into `matched_chunk` so naive agents get the anchor without reading the title.
 
+## supermemory-local — head-to-head status
+
+Provider works end-to-end against the live `supermemory-server 0.0.2`
+(local, Ollama-backed). **Preliminary head-to-head** (35-query ConvoMem
+smoke, both providers clean): QA tied (BM and supermemory both 0.943), BM
+search **3.4× faster** (84ms vs 289ms). On a reconfirm and a 110-query
+sample, bm-local scored strongly standalone (110q: **0.845**, 35q: **0.914**).
+
+**A fair full comparison is currently blocked by upstream issue #1096.**
+Server logs confirm it directly:
+
+```
+[Workflow] Document … memory agent failed (228110ms)
+WARN  Self-hosted memory agent failed for document, skipping memory generation
+```
+
+supermemory's "memory agent" (its LLM extraction/summarization step) calls
+the OpenAI **Responses API**, which Ollama rejects — and it spends **~228s per
+document** timing out before skipping. At ~10 docs/group this exceeds any
+practical ingest timeout, so grouped runs fail. Embeddings (on-device WASM)
+work but are slow (~3-4× BM's search latency) and showed instability under
+sustained load on one server instance.
+
+Two honest findings stand on their own:
+1. **supermemory-local is operationally heavy** — slow on-device embedding and
+   an extraction step that does not function with a local Ollama LLM, making
+   large fair runs impractical in this setup without more engineering.
+2. On the small slice that completed, **BM matches supermemory on QA and is
+   markedly faster.**
+
+**Next step to complete the comparison:** a Responses→ChatCompletions shim
+proxy in front of Ollama (the documented #1096 workaround) so supermemory's
+memory agent functions, then a full grouped run. Until then the supermemory
+number is preliminary and labeled as such.
+
 ## Pending
-- supermemory-local provider validated against the real server but not yet in
-  a matrix run (Ollama extraction hits upstream issue #1096; needs the
-  Responses→ChatCompletions shim).
+- Responses→ChatCompletions shim for a fair full supermemory comparison (#1096).
+- Product follow-ups stacking on basic-memory #994: fold heading/date into
+  `matched_chunk`; cross-encoder rerank (#950/#618) for single_hop/temporal.
