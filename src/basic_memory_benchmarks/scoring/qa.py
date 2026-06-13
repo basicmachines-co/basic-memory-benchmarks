@@ -54,12 +54,21 @@ Answer:"""
 
 JUDGE_PROMPT_TEMPLATE = """\
 You are grading a question-answering system against a reference (gold) answer.
-The gold answer may be INCOMPLETE: it lists the key fact(s) the candidate must
-cover, but is not necessarily an exhaustive list.
 
 Question: {question}
 Gold answer: {gold}
 Candidate answer: {candidate}
+
+FIRST, handle the unanswerable case. If the gold answer indicates the
+information is NOT available (e.g. "no information", "not mentioned", "cannot
+be determined"), then judge ONLY on whether the candidate declines:
+- correct = true if the candidate also declines / abstains (e.g. "{abstain}").
+- correct = false if the candidate asserts a specific factual answer.
+Do not apply the fact-matching rules below to this case.
+
+OTHERWISE (the gold answer contains real facts), the gold answer may be
+INCOMPLETE: it lists the key fact(s) the candidate must cover, but is not
+necessarily an exhaustive list.
 
 Mark correct = true when BOTH hold:
 - The candidate states every key fact in the gold answer (paraphrase and
@@ -71,10 +80,8 @@ do not treat them as hallucination unless they directly contradict the gold.
 Mark correct = false when ANY holds:
 - A key fact from the gold answer is missing from the candidate.
 - The candidate contradicts the gold answer.
-- The gold answer indicates the information is unavailable (e.g. "not
-  mentioned", "no information") but the candidate asserts a fact; OR the gold
-  answer contains a real fact but the candidate declines to answer (e.g.
-  "{abstain}").
+- The candidate declines to answer (e.g. "{abstain}") even though the gold
+  answer contains a real fact.
 
 Reply with only a JSON object: {{"correct": true or false, "reason": "<one sentence>"}}"""
 
