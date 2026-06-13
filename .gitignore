@@ -22,3 +22,4 @@ benchmarks/datasets/locomo-audit/
 benchmarks/.mem0-qdrant/
 benchmarks/datasets/convomem/
 benchmarks/.bm-homes/
+.supermemory/
