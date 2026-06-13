@@ -144,3 +144,33 @@ def test_resolve_bm_command_prefix_local_path_missing_raises() -> None:
     )
     with pytest.raises(ValueError, match="--bm-local-path not found"):
         BasicMemoryLocalProvider._resolve_bm_command_prefix(run_config)
+
+
+def test_row_to_hit_surfaces_title_for_date_anchoring() -> None:
+    """The document title (carrying the session date) reaches hit metadata."""
+    from basic_memory_benchmarks.providers.bm_local import BasicMemoryLocalProvider
+
+    row = {
+        "title": "locomo-c00-s07 (4:33 pm on 12 July, 2023)",
+        "entity_id": 7,
+        "file_path": "locomo-c00-s07.md",
+        "matched_chunk": "- **Caroline:** I went to an LGBTQ conference two days ago",
+        "content": "# Chat session at 4:33 pm on 12 July, 2023\n...",
+        "score": 1.13,
+        "metadata": {"note_type": "note"},
+    }
+    hit = BasicMemoryLocalProvider._row_to_hit(row)
+    assert hit.metadata["title"] == "locomo-c00-s07 (4:33 pm on 12 July, 2023)"
+    assert hit.metadata["note_type"] == "note"  # existing metadata preserved
+    assert hit.source_doc_id == "locomo-c00-s07"
+    assert "two days ago" in (hit.text or "")
+    assert hit.score == 1.13
+
+
+def test_row_to_hit_without_title_omits_key() -> None:
+    from basic_memory_benchmarks.providers.bm_local import BasicMemoryLocalProvider
+
+    hit = BasicMemoryLocalProvider._row_to_hit(
+        {"entity_id": 1, "matched_chunk": "text", "file_path": "doc.md"}
+    )
+    assert "title" not in hit.metadata
