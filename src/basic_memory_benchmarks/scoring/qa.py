@@ -53,22 +53,28 @@ Instructions:
 Answer:"""
 
 JUDGE_PROMPT_TEMPLATE = """\
-You are grading a question-answering system. Compare the candidate answer to the
-gold answer.
+You are grading a question-answering system against a reference (gold) answer.
+The gold answer may be INCOMPLETE: it lists the key fact(s) the candidate must
+cover, but is not necessarily an exhaustive list.
 
 Question: {question}
 Gold answer: {gold}
 Candidate answer: {candidate}
 
-Grading rules:
-- correct = true only if the candidate states the same core fact(s) as the gold
-  answer. Paraphrase, formatting, and extra correct detail are fine.
-- If the gold answer indicates the information is not available (e.g. "not
-  mentioned", "no information"), the candidate is correct only if it also
-  declines to answer (e.g. "{abstain}").
-- A candidate that declines to answer when the gold answer contains a real fact
-  is incorrect.
-- Partial answers missing a key fact are incorrect.
+Mark correct = true when BOTH hold:
+- The candidate states every key fact in the gold answer (paraphrase and
+  formatting differences are fine).
+- The candidate does not contradict the gold answer.
+Additional specific facts in the candidate beyond the gold answer are NOT errors;
+do not treat them as hallucination unless they directly contradict the gold.
+
+Mark correct = false when ANY holds:
+- A key fact from the gold answer is missing from the candidate.
+- The candidate contradicts the gold answer.
+- The gold answer indicates the information is unavailable (e.g. "not
+  mentioned", "no information") but the candidate asserts a fact; OR the gold
+  answer contains a real fact but the candidate declines to answer (e.g.
+  "{abstain}").
 
 Reply with only a JSON object: {{"correct": true or false, "reason": "<one sentence>"}}"""
 

@@ -81,6 +81,14 @@ class TestPrompts:
         assert "gold fact" in prompt
         assert "candidate fact" in prompt
 
+    def test_judge_prompt_allows_incomplete_gold(self):
+        # The rubric must tell the judge gold answers may be incomplete and that
+        # extra non-contradicting facts are not errors (LoCoMo gold answers are
+        # documented-incomplete; the prior rubric over-failed correct answers).
+        prompt = build_judge_prompt("Q?", "gold", "candidate")
+        assert "INCOMPLETE" in prompt
+        assert "not errors" in prompt.lower()
+
 
 class TestParseJudgeVerdict:
     def test_plain_json(self):
