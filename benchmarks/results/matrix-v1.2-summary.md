@@ -72,11 +72,40 @@ Every category improves; largest on adversarial (+0.12 r5) and open_domain
 By category (correct/total): open_domain 105→112, single_hop 18→23,
 multi_hop 4→5, temporal 5→3 (n=19, noise).
 
-The QA gain is smaller than the retrieval gain because the largest retrieval
-improvements land in the adversarial category (excluded from QA-meaningful
-scoring) and **multi_hop stays ~0.08 — bottlenecked by a separate gap, not
-FTS**: BM returns bullet-level matched chunks that strip document-level
-context (the session date lives in the title). That is the next product fix.
+The #994-only QA gain is smaller than the retrieval gain because the largest
+retrieval improvements land in the adversarial category (excluded from
+QA-meaningful scoring) and **multi_hop stayed ~0.08 — bottlenecked by a
+separate gap**: BM returns bullet-level matched chunks that strip
+document-level context (the session date lives in the title). That gap is
+addressed next.
+
+## #994 + title-passthrough (combined) — corrected LoCoMo q300
+
+The harness was discarding the dated `title` that `search_notes` returns
+(PR #31, `bm_local._row_to_hit`); surfacing it lets the answerer anchor
+relative-date references ("two days ago"). Combined with #994, on the same
+q300 subset and QA stage:
+
+| QA accuracy | BM main | +FTS (#994) | +FTS +title |
+|---|---|---|---|
+| overall | 0.439 | 0.475 | **0.611** |
+
+By category (correct/total), main → +FTS → +FTS+title:
+
+| category | main | +FTS | +FTS+title |
+|---|---|---|---|
+| single_hop | 18/55 | 23/55 | 20/55 |
+| multi_hop | 4/63 | 5/63 | **40/63** |
+| temporal | 5/19 | 3/19 | 5/19 |
+| open_domain | 105/164 | 112/164 | 119/164 |
+
+**+17.2 points overall (0.439 → 0.611)**, driven by multi_hop (4 → 40 — these
+are mostly relative-date questions that were unanswerable without the session
+date). single_hop dips 23 → 20 vs the FTS-only run (the title header
+occasionally distracts simple lookups; n=55, within LLM-judge noise, still +2
+vs main). The title fix is harness-side and provider-faithful — it uses data
+BM already returns. A product follow-up could fold the parent heading/date
+into `matched_chunk` so naive agents get the anchor without reading the title.
 
 ## Pending
 - supermemory-local provider validated against the real server but not yet in
