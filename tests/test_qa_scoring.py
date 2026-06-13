@@ -378,3 +378,84 @@ class TestHitTitleInContext:
         )
         ctx = assemble_context([hit])
         assert ctx.count("Chat session at 8 May 2023") == 1
+
+
+class TestRejudge:
+    def _case(self, qid, correct, generated="ans", error=None, category="single_hop"):
+        from basic_memory_benchmarks.models import QACaseResult
+
+        return QACaseResult(
+            provider="bm-local",
+            query_id=qid,
+            category=category,
+            question="Q?",
+            expected_answer="gold",
+            generated_answer=generated,
+            abstained=False,
+            correct=correct,
+            judge_reason="orig",
+            answer_model="claude:haiku",
+            judge_model="claude:sonnet",
+            answer_latency_ms=1.0,
+            answer_input_tokens=1,
+            answer_output_tokens=1,
+            error=error,
+        )
+
+    def test_rejudge_flips_and_summary(self):
+        from basic_memory_benchmarks.scoring.qa import rejudge_cases
+
+        cases = [self._case("q1", correct=False), self._case("q2", correct=True)]
+        # New judge flips q1 to correct, keeps q2 correct.
+        judge = FakeRunner(
+            {},
+            default='{"correct": true, "reason": "incomplete gold is fine"}',
+        )
+        rejudged, summary, flips = rejudge_cases(cases, judge=judge, max_workers=1)
+
+        assert summary.correct_count == 2
+        assert summary.accuracy == 1.0
+        assert len(flips) == 1
+        assert flips[0]["query_id"] == "q1"
+        assert flips[0]["was_correct"] is False and flips[0]["now_correct"] is True
+        # answerer fields preserved; judge_model updated.
+        assert rejudged[0].judge_model == "fake:test"
+        assert rejudged[0].answer_model == "claude:haiku"
+
+    def test_rejudge_preserves_errored_cases(self):
+        from basic_memory_benchmarks.scoring.qa import rejudge_cases
+
+        cases = [self._case("q1", correct=False, error="llm died")]
+        judge = FakeRunner({}, default='{"correct": true, "reason": "x"}')
+        rejudged, summary, flips = rejudge_cases(cases, judge=judge, max_workers=1)
+        # Errored case is untouched (no generated answer to judge).
+        assert rejudged[0].correct is False
+        assert rejudged[0].error == "llm died"
+        assert flips == []
+
+    def test_rejudge_empty(self):
+        from basic_memory_benchmarks.scoring.qa import rejudge_cases
+
+        judge = FakeRunner({}, default='{"correct": true, "reason": "x"}')
+        rejudged, summary, flips = rejudge_cases([], judge=judge)
+        assert rejudged == [] and flips == []
+        assert summary.skipped_reason is not None
+
+    def test_rejudge_stage_artifacts(self, tmp_path, monkeypatch):
+        import json as _json
+
+        from basic_memory_benchmarks import runner as runner_module
+
+        case = self._case("q1", correct=False)
+        (tmp_path / "per-query-qa.jsonl").write_text(
+            _json.dumps(case.model_dump(mode="json")) + "\n", encoding="utf-8"
+        )
+        fake = FakeRunner({}, default='{"correct": true, "reason": "flipped"}')
+        monkeypatch.setattr("basic_memory_benchmarks.llm.runners.create_runner", lambda spec: fake)
+        runner_module.run_rejudge_stage(run_dir=tmp_path, judge_spec="fake:test", max_workers=1)
+
+        assert (tmp_path / "per-query-qa-rejudge.jsonl").exists()
+        summary = _json.loads((tmp_path / "qa-rejudge-summary.json").read_text())
+        assert summary["providers"][0]["correct_count"] == 1
+        flips = _json.loads((tmp_path / "qa-rejudge-flips.json").read_text())
+        assert flips["flip_count"] == 1

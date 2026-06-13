@@ -227,6 +227,105 @@ def _score_case(
         )
 
 
+def _rejudge_case(case: QACaseResult, judge: LLMRunner) -> QACaseResult:
+    """Re-judge one stored case against its generated answer (no regeneration).
+
+    Errored cases (no generated answer) are returned unchanged. The answerer
+    fields are preserved; only the verdict and judge_model are updated.
+    """
+    if case.error:
+        return case
+    try:
+        verdict = judge.complete(
+            build_judge_prompt(case.question, case.expected_answer, case.generated_answer)
+        )
+        correct, reason = parse_judge_verdict(verdict.text)
+    except (LLMRunnerError, ValueError, json.JSONDecodeError) as exc:
+        return case.model_copy(update={"error": f"rejudge failed: {exc}"})
+    return case.model_copy(
+        update={"correct": correct, "judge_reason": reason, "judge_model": judge.spec}
+    )
+
+
+def rejudge_cases(
+    cases: list[QACaseResult],
+    *,
+    judge: LLMRunner,
+    max_workers: int = 4,
+) -> tuple[list[QACaseResult], QASummary, list[dict]]:
+    """Re-judge stored QA cases with a (possibly different) judge.
+
+    Returns the re-judged cases, a summary, and the list of verdict flips
+    (cases whose correctness changed) for calibration review.
+    """
+    if not cases:
+        return (
+            [],
+            QASummary(
+                provider="rejudge",
+                answer_model="stored",
+                judge_model=judge.spec,
+                total_cases=0,
+                correct_count=0,
+                error_count=0,
+                abstain_count=0,
+                accuracy=0.0,
+                skipped_reason="No stored cases to re-judge",
+            ),
+            [],
+        )
+
+    provider = cases[0].provider
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        rejudged = list(pool.map(lambda c: _rejudge_case(c, judge), cases))
+
+    flips = [
+        {
+            "query_id": new.query_id,
+            "category": new.category,
+            "question": new.question,
+            "expected_answer": new.expected_answer,
+            "generated_answer": new.generated_answer,
+            "was_correct": old.correct,
+            "now_correct": new.correct,
+            "old_reason": old.judge_reason,
+            "new_reason": new.judge_reason,
+        }
+        for old, new in zip(cases, rejudged)
+        if old.correct != new.correct
+    ]
+    summary = _summarize_cases(rejudged, provider=provider, answer_model="stored", judge=judge)
+    return rejudged, summary, flips
+
+
+def _summarize_cases(
+    case_results: list[QACaseResult],
+    *,
+    provider: str,
+    answer_model: str,
+    judge: LLMRunner,
+) -> QASummary:
+    by_category: dict[str, QACategoryMetrics] = {}
+    for case in case_results:
+        bucket = by_category.setdefault(case.category, QACategoryMetrics())
+        bucket.total += 1
+        bucket.correct += 1 if case.correct else 0
+    for bucket in by_category.values():
+        bucket.accuracy = bucket.correct / bucket.total if bucket.total else 0.0
+    correct_count = sum(1 for case in case_results if case.correct)
+    return QASummary(
+        provider=provider,
+        answer_model=answer_model,
+        judge_model=judge.spec,
+        total_cases=len(case_results),
+        correct_count=correct_count,
+        error_count=sum(1 for case in case_results if case.error),
+        abstain_count=sum(1 for case in case_results if case.abstained),
+        accuracy=correct_count / len(case_results) if case_results else 0.0,
+        by_category=by_category,
+    )
+
+
 def run_qa(
     rows: list[PerQueryRetrievalResult],
     *,

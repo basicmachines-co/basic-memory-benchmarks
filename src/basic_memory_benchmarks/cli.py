@@ -24,7 +24,12 @@ from basic_memory_benchmarks.reporting.compare import (
     compare_provider_metric,
     load_retrieval_summary,
 )
-from basic_memory_benchmarks.runner import run_judge, run_qa_stage, run_retrieval
+from basic_memory_benchmarks.runner import (
+    run_judge,
+    run_qa_stage,
+    run_rejudge_stage,
+    run_retrieval,
+)
 from basic_memory_benchmarks.utils import sha256_file
 
 app = typer.Typer(help="Basic Memory benchmark suite")
@@ -225,6 +230,18 @@ def run_qa_command(
     )
     console.print(f"QA run complete: [green]{out}[/green]")
     console.print(f"See [cyan]{out / 'qa-summary.json'}[/cyan]")
+
+
+@run_app.command("rejudge")
+def run_rejudge_command(
+    run_dir: Path = typer.Option(..., "--run-dir"),
+    judge: str = typer.Option("claude:claude-sonnet-4-6", "--judge"),
+    max_workers: int = typer.Option(4, "--max-workers"),
+) -> None:
+    """Re-judge stored QA answers (no regeneration); reports verdict flips."""
+    out = run_rejudge_stage(run_dir=run_dir, judge_spec=judge, max_workers=max_workers)
+    console.print(f"Re-judge complete: [green]{out}[/green]")
+    console.print(f"Flips: [cyan]{out / 'qa-rejudge-flips.json'}[/cyan]")
 
 
 @run_app.command("judge")
