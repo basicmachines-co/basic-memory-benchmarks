@@ -347,6 +347,36 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
             name = name[:-3]
         return name
 
+    @classmethod
+    def _row_to_hit(cls, row: dict[str, Any]) -> SearchHit:
+        """Normalize a search_notes result row into a SearchHit.
+
+        Carries the document title into hit metadata: BM's matched_chunk is a
+        single bullet that strips document context, but the title holds it (for
+        LoCoMo/LongMemEval the session date lives there, e.g.
+        ``locomo-c00-s07 (4:33 pm on 12 July, 2023)``). Surfacing it lets the QA
+        assembler anchor relative dates ("two days ago") that bullets alone
+        leave unresolvable.
+        """
+        metadata_raw = row.get("metadata")
+        metadata: dict[str, Any]
+        if isinstance(metadata_raw, dict):
+            metadata = cast(dict[str, Any], metadata_raw)
+        else:
+            metadata = {}
+        if row.get("title"):
+            metadata = {**metadata, "title": str(row["title"])}
+        return SearchHit(
+            id=str(
+                row.get("entity_id") or row.get("observation_id") or row.get("relation_id") or ""
+            ),
+            source_doc_id=cls._doc_id_from_item(row),
+            source_path=row.get("file_path") or row.get("permalink"),
+            text=row.get("matched_chunk") or row.get("content"),
+            score=float(row.get("score", 0.0) or 0.0),
+            metadata=metadata,
+        )
+
     def search(self, query: str, limit: int, run_config: RunConfig) -> list[SearchHit]:
         if self._mcp is None:
             raise RuntimeError("bm-local MCP session is not initialized")
@@ -369,27 +399,7 @@ class BasicMemoryLocalProvider(BenchmarkProvider):
         for row in rows or []:
             if not isinstance(row, dict):
                 continue
-            metadata_raw = row.get("metadata")
-            metadata: dict[str, Any]
-            if isinstance(metadata_raw, dict):
-                metadata = cast(dict[str, Any], metadata_raw)
-            else:
-                metadata = {}
-            hits.append(
-                SearchHit(
-                    id=str(
-                        row.get("entity_id")
-                        or row.get("observation_id")
-                        or row.get("relation_id")
-                        or ""
-                    ),
-                    source_doc_id=self._doc_id_from_item(row),
-                    source_path=row.get("file_path") or row.get("permalink"),
-                    text=row.get("matched_chunk") or row.get("content"),
-                    score=float(row.get("score", 0.0) or 0.0),
-                    metadata=metadata,
-                )
-            )
+            hits.append(self._row_to_hit(row))
         return hits
 
     def cleanup(self, run_config: RunConfig) -> None:
