@@ -298,3 +298,26 @@ class TestGroupErrorCapture:
         assert meta["failed_group_count"] == "2"
         assert "qb: RuntimeError: boom in qb" in meta["failed_group_error_0"]
         assert "qc: RuntimeError: boom in qc" in meta["failed_group_error_1"]
+
+
+class TestAllGroupsFailedDetail:
+    def test_all_failed_error_includes_group_causes(self, tmp_path):
+        """When every group fails, the raised error must name the causes.
+
+        An opaque 'all N groups failed' with no reason is undiagnosable after
+        a long run (hit during the supermemory integration).
+        """
+        corpus_root, queries_path = _setup_grouped_corpus(tmp_path, ["qa", "qb"])
+        RecordingProvider.fail_groups = {"qa", "qb"}
+        config = _run_config(tmp_path, corpus_root, queries_path)
+        config = config.model_copy(update={"allow_provider_skip": False})
+
+        with pytest.raises(RuntimeError, match="All 2 groups failed") as excinfo:
+            run_retrieval(
+                run_config=config,
+                dataset=_provenance(),
+                provider_factory=lambda name: RecordingProvider(),
+            )
+        message = str(excinfo.value)
+        assert "qa: RuntimeError: boom in qa" in message
+        assert "qb: RuntimeError: boom in qb" in message
