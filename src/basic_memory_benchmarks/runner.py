@@ -352,6 +352,41 @@ def run_qa_stage(
     return run_dir
 
 
+def run_review_stage(
+    *,
+    run_dir: Path,
+    source: str = "auto",
+) -> Path:
+    """Render a self-contained judge-review HTML report for a run.
+
+    ``source``: 'qa' uses per-query-qa.jsonl, 'rejudge' uses
+    per-query-qa-rejudge.jsonl, 'auto' prefers the re-judged file when present.
+    Writes review.html into the run dir and returns its path.
+    """
+    from basic_memory_benchmarks.models import QACaseResult
+    from basic_memory_benchmarks.scoring.review import build_review_html
+
+    rejudge_path = run_dir / "per-query-qa-rejudge.jsonl"
+    qa_path = run_dir / "per-query-qa.jsonl"
+    if source == "rejudge" or (source == "auto" and rejudge_path.exists()):
+        chosen = rejudge_path
+    else:
+        chosen = qa_path
+    if not chosen.exists():
+        raise FileNotFoundError(f"No QA artifact to review: {chosen}")
+
+    cases = []
+    with chosen.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                cases.append(QACaseResult.model_validate(json.loads(line)))
+
+    review_path = run_dir / "review.html"
+    review_path.write_text(build_review_html(cases, run_id=run_dir.name), encoding="utf-8")
+    return review_path
+
+
 def run_rejudge_stage(
     *,
     run_dir: Path,

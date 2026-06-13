@@ -28,6 +28,7 @@ from basic_memory_benchmarks.runner import (
     run_judge,
     run_qa_stage,
     run_rejudge_stage,
+    run_review_stage,
     run_retrieval,
 )
 from basic_memory_benchmarks.utils import sha256_file
@@ -230,6 +231,17 @@ def run_qa_command(
     )
     console.print(f"QA run complete: [green]{out}[/green]")
     console.print(f"See [cyan]{out / 'qa-summary.json'}[/cyan]")
+
+
+@run_app.command("review")
+def run_review_command(
+    run_dir: Path = typer.Option(..., "--run-dir"),
+    source: str = typer.Option("auto", "--source", help="qa | rejudge | auto"),
+) -> None:
+    """Render a self-contained judge-review/labeling HTML report for a run."""
+    out = run_review_stage(run_dir=run_dir, source=source)
+    console.print(f"Review report: [green]{out}[/green]")
+    console.print(f"Open it: [cyan]open {out}[/cyan]")
 
 
 @run_app.command("rejudge")
