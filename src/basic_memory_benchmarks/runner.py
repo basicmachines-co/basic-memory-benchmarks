@@ -166,7 +166,13 @@ def _execute_provider_grouped(
                 pass
 
     if last_provider is None:
-        raise RuntimeError(f"All {len(failed_groups)} groups failed for provider {provider_name}")
+        # Surface the first captured errors: an opaque "all failed" with no
+        # cause is undiagnosable after a multi-hour run.
+        detail = "; ".join(f"{gid}: {msg}" for gid, msg in sorted(failed_group_errors.items()))
+        raise RuntimeError(
+            f"All {len(failed_groups)} groups failed for provider {provider_name}"
+            + (f" — {detail}" if detail else "")
+        )
 
     group_metadata: dict[str, str] = {
         "grouped_mode": "true",
