@@ -89,6 +89,17 @@ class TestPrompts:
         assert "INCOMPLETE" in prompt
         assert "not errors" in prompt.lower()
 
+    def test_judge_prompt_handles_unanswerable_before_fact_matching(self):
+        # Abstention/unanswerable cases (ConvoMem abstention, LoCoMo adversarial)
+        # must be judged FIRST on whether the candidate declines — otherwise the
+        # fact-matching rules wrongly fail a correct "I don't know" against a
+        # "no information" gold (regression caught during number regeneration).
+        prompt = build_judge_prompt("Q?", "gold", "candidate")
+        first = prompt.split("OTHERWISE")[0]
+        assert "not available" in first.lower()
+        assert ABSTAIN_SENTINEL in first
+        assert "declines" in first.lower()
+
 
 class TestParseJudgeVerdict:
     def test_plain_json(self):
