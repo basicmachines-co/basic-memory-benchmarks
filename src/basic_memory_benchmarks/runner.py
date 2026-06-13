@@ -352,6 +352,66 @@ def run_qa_stage(
     return run_dir
 
 
+def run_rejudge_stage(
+    *,
+    run_dir: Path,
+    judge_spec: str,
+    max_workers: int = 4,
+) -> Path:
+    """Re-judge stored QA answers with a (possibly different) judge.
+
+    Reads per-query-qa.jsonl, re-runs only the judge on each stored generated
+    answer, and writes per-query-qa-rejudge.jsonl, qa-rejudge-summary.json (per
+    provider), and qa-rejudge-flips.json (cases whose verdict changed) for
+    judge-calibration review. The original QA artifacts are left untouched.
+    """
+    from basic_memory_benchmarks.llm.runners import create_runner
+    from basic_memory_benchmarks.models import QACaseResult
+    from basic_memory_benchmarks.scoring.qa import rejudge_cases
+
+    qa_path = run_dir / "per-query-qa.jsonl"
+    if not qa_path.exists():
+        raise FileNotFoundError(f"Missing QA artifact: {qa_path}")
+
+    cases_by_provider: dict[str, list[QACaseResult]] = {}
+    with qa_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                case = QACaseResult.model_validate(json.loads(line))
+                cases_by_provider.setdefault(case.provider, []).append(case)
+
+    judge = create_runner(judge_spec)
+    all_rejudged = []
+    summaries = []
+    all_flips = []
+    for provider, cases in cases_by_provider.items():
+        rejudged, summary, flips = rejudge_cases(cases, judge=judge, max_workers=max_workers)
+        all_rejudged.extend(rejudged)
+        summaries.append(summary)
+        all_flips.extend(flips)
+
+    rejudge_jsonl = run_dir / "per-query-qa-rejudge.jsonl"
+    with rejudge_jsonl.open("w", encoding="utf-8") as file:
+        for case in all_rejudged:
+            file.write(json.dumps(case.model_dump(mode="json"), sort_keys=True) + "\n")
+
+    (run_dir / "qa-rejudge-summary.json").write_text(
+        json.dumps(
+            {"judge": judge_spec, "providers": [s.model_dump(mode="json") for s in summaries]},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "qa-rejudge-flips.json").write_text(
+        json.dumps(
+            {"judge": judge_spec, "flip_count": len(all_flips), "flips": all_flips}, indent=2
+        ),
+        encoding="utf-8",
+    )
+    return run_dir
+
+
 def run_judge(
     *,
     run_dir: Path,
