@@ -363,8 +363,18 @@ def run_review_stage(
     per-query-qa-rejudge.jsonl, 'auto' prefers the re-judged file when present.
     Writes review.html into the run dir and returns its path.
     """
-    from basic_memory_benchmarks.models import QACaseResult
     from basic_memory_benchmarks.scoring.review import build_review_html
+
+    cases, _chosen = _load_qa_cases(run_dir, source)
+
+    review_path = run_dir / "review.html"
+    review_path.write_text(build_review_html(cases, run_id=run_dir.name), encoding="utf-8")
+    return review_path
+
+
+def _load_qa_cases(run_dir: Path, source: str):
+    """Load QA cases, preferring the re-judged artifact under 'auto'."""
+    from basic_memory_benchmarks.models import QACaseResult
 
     rejudge_path = run_dir / "per-query-qa-rejudge.jsonl"
     qa_path = run_dir / "per-query-qa.jsonl"
@@ -373,7 +383,7 @@ def run_review_stage(
     else:
         chosen = qa_path
     if not chosen.exists():
-        raise FileNotFoundError(f"No QA artifact to review: {chosen}")
+        raise FileNotFoundError(f"No QA artifact to load: {chosen}")
 
     cases = []
     with chosen.open("r", encoding="utf-8") as file:
@@ -381,10 +391,42 @@ def run_review_stage(
             line = line.strip()
             if line:
                 cases.append(QACaseResult.model_validate(json.loads(line)))
+    return cases, chosen
 
-    review_path = run_dir / "review.html"
-    review_path.write_text(build_review_html(cases, run_id=run_dir.name), encoding="utf-8")
-    return review_path
+
+def run_diagnose_stage(
+    *,
+    run_dir: Path,
+    source: str = "auto",
+    recall_field: str = "recall_at_10",
+) -> Path:
+    """Attribute QA failures to retrieval vs the answerer for each provider.
+
+    Joins QA verdicts (per-query-qa[-rejudge].jsonl) with retrieval rows
+    (per-query-retrieval.jsonl) and writes qa-diagnosis.json, separating
+    "retrieved but unused" (answerer) failures from "truly missed" (retrieval)
+    failures. ``source``: 'qa' | 'rejudge' | 'auto' (prefers re-judged).
+    Returns the path to qa-diagnosis.json.
+    """
+    from basic_memory_benchmarks.scoring.diagnose import diagnose_run
+
+    qa_cases, chosen = _load_qa_cases(run_dir, source)
+    retrieval_rows = _load_retrieval_rows(run_dir)
+    diagnoses = diagnose_run(qa_cases, retrieval_rows, recall_field=recall_field)
+
+    out_path = run_dir / "qa-diagnosis.json"
+    out_path.write_text(
+        json.dumps(
+            {
+                "source": chosen.name,
+                "recall_field": recall_field,
+                "providers": [d.model_dump(mode="json") for d in diagnoses],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return out_path
 
 
 def run_rejudge_stage(

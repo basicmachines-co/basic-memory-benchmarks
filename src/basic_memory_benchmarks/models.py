@@ -145,6 +145,46 @@ class QASummary(BaseModel):
     skipped_reason: str | None = None
 
 
+class CategoryDiagnosis(BaseModel):
+    """Per-category answerer-vs-retrieval attribution of QA failures."""
+
+    answerable: int = 0
+    correct: int = 0
+    retrieved_but_unused: int = 0  # gold retrieved, answer still wrong → answerer's fault
+    truly_missed: int = 0  # gold not retrieved → retrieval's fault
+
+
+class ProviderDiagnosis(BaseModel):
+    """Attributes each provider's QA outcomes to retrieval vs the answerer.
+
+    For every answerable question (non-empty ``ground_truth``) we join the QA
+    verdict with the retrieval row on ``(provider, query_id)``. A wrong answer
+    where the gold doc WAS retrieved (recall > 0) is an answerer failure
+    ("retrieved but unused"); a wrong answer where it was NOT retrieved is a
+    genuine retrieval miss. This separates "BM didn't find it" from "the fixed
+    answerer couldn't use what BM found" — the absolute QA number conflates the
+    two, and the answerer is held constant across providers.
+    """
+
+    provider: str
+    total_cases: int = 0
+    answerable: int = 0
+    unanswerable: int = 0  # empty ground_truth (abstention items) — no retrieval attribution
+    errored: int = 0  # QA-stage error (answerer/judge crashed)
+    unmatched: int = 0  # no retrieval row to join against
+    correct: int = 0
+    retrieved_but_unused: int = 0
+    truly_missed: int = 0
+    # Derived shares over answerable questions (0.0 when answerable == 0):
+    qa_accuracy: float = 0.0  # correct / answerable
+    retrieval_ceiling: float = 0.0  # (correct + retrieved_but_unused) / answerable — max QA if answerer were perfect
+    answerer_gap: float = 0.0  # retrieved_but_unused / answerable — headroom left on the table by the answerer
+    retrieval_gap: float = 0.0  # truly_missed / answerable — headroom that needs better retrieval
+    answerer_failure_share: float = 0.0  # retrieved_but_unused / (answerable failures) — of what we got wrong, how much was the answerer
+    recall_field: str = "recall_at_10"
+    by_category: dict[str, CategoryDiagnosis] = Field(default_factory=dict)
+
+
 class ProviderStatus(BaseModel):
     provider: str
     state: PROVIDER_STATE
