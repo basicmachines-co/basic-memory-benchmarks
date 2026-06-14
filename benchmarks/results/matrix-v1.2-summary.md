@@ -1,3 +1,7 @@
+> **SUPERSEDED by `matrix-v2-summary.md`** (corrected judge rubric #36/#37, BM
+> post-#994, recall-led with the failure diagnostic). Kept for history; the QA
+> numbers below predate the rubric correction and the FTS-revival merge.
+
 # Benchmark Matrix v1.2 — internal results
 
 Run: 2026-06-12 evening. Local, zero API spend (answerer `claude:claude-haiku-4-5`,
