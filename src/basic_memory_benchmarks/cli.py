@@ -25,6 +25,7 @@ from basic_memory_benchmarks.reporting.compare import (
     load_retrieval_summary,
 )
 from basic_memory_benchmarks.runner import (
+    run_diagnose_stage,
     run_judge,
     run_qa_stage,
     run_rejudge_stage,
@@ -242,6 +243,49 @@ def run_review_command(
     out = run_review_stage(run_dir=run_dir, source=source)
     console.print(f"Review report: [green]{out}[/green]")
     console.print(f"Open it: [cyan]open {out}[/cyan]")
+
+
+@run_app.command("diagnose")
+def run_diagnose_command(
+    run_dir: Path = typer.Option(..., "--run-dir"),
+    source: str = typer.Option("auto", "--source", help="qa | rejudge | auto"),
+    recall_field: str = typer.Option(
+        "recall_at_10", "--recall-field", help="recall_at_5 | recall_at_10"
+    ),
+) -> None:
+    """Attribute QA failures to retrieval vs the answerer (per provider).
+
+    Separates "retrieved but unused" (the fixed answerer's fault, identical
+    across providers) from "truly missed" (a real retrieval failure), so QA
+    accuracy can be read honestly against the retrieval ceiling.
+    """
+    import json
+
+    from rich.table import Table
+
+    out = run_diagnose_stage(run_dir=run_dir, source=source, recall_field=recall_field)
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    table = Table(title=f"Failure attribution — {run_dir.name} ({payload['source']})")
+    table.add_column("provider")
+    table.add_column("answerable", justify="right")
+    table.add_column("QA acc", justify="right")
+    table.add_column("retr. ceiling", justify="right")
+    table.add_column("answerer gap", justify="right")
+    table.add_column("retrieval gap", justify="right")
+    table.add_column("of fails: answerer", justify="right")
+    for prov in payload["providers"]:
+        table.add_row(
+            prov["provider"],
+            str(prov["answerable"]),
+            f"{prov['qa_accuracy']:.3f}",
+            f"{prov['retrieval_ceiling']:.3f}",
+            f"{prov['answerer_gap']:.3f}",
+            f"{prov['retrieval_gap']:.3f}",
+            f"{prov['answerer_failure_share']:.0%}",
+        )
+    console.print(table)
+    console.print(f"Wrote [green]{out}[/green]")
 
 
 @run_app.command("rejudge")
