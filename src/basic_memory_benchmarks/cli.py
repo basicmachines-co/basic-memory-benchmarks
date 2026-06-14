@@ -102,6 +102,63 @@ def convert_locomo(
     console.print(f"Queries: [cyan]{queries_path}[/cyan] ({query_count})")
 
 
+@convert_app.command("structure-corpus")
+def convert_structure_corpus(
+    input_dir: Path = typer.Option(
+        ..., "--input-dir", help="Source corpus root (a flat docs dir or a grouped …/groups dir)"
+    ),
+    output_dir: Path = typer.Option(
+        ..., "--output-dir", help="Destination root; the input layout is mirrored beneath it"
+    ),
+    mode: str = typer.Option(
+        "augment",
+        "--mode",
+        help="augment: keep transcript + append structure (faithful); replace: structure only (lossy)",
+    ),
+    categories: str = typer.Option(
+        "",
+        "--categories",
+        help="Grouped corpora only: comma-separated category labels to restructure (matches group-id prefix). Empty = all docs.",
+    ),
+    extractor: str = typer.Option(
+        "claude:claude-haiku-4-5", "--extractor", help="LLM runner spec for fact extraction"
+    ),
+    max_workers: int = typer.Option(4, "--max-workers"),
+) -> None:
+    """Restructure flat conversation docs into Basic Memory observations/relations.
+
+    Produces a structured twin of a corpus with doc ids/frontmatter preserved, so
+    a flat-vs-structured run isolates the representation and recall stays
+    comparable. Works on both grouped and flat corpora (layout is mirrored).
+    """
+    from basic_memory_benchmarks.converters.structure_corpus import (
+        group_prefix_filter,
+        structure_corpus,
+    )
+    from basic_memory_benchmarks.llm.runners import create_runner
+
+    if mode not in ("augment", "replace"):
+        raise typer.BadParameter("--mode must be 'augment' or 'replace'")
+    cats = {c.strip() for c in categories.split(",") if c.strip()}
+    path_filter = group_prefix_filter(cats) if cats else None
+    runner = create_runner(extractor)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    doc_count = structure_corpus(
+        input_root=input_dir,
+        output_root=output_dir,
+        runner=runner,
+        mode=mode,  # type: ignore[arg-type]
+        path_filter=path_filter,
+        max_workers=max_workers,
+    )
+
+    console.print(f"Structured ([green]{mode}[/green]): [cyan]{output_dir}[/cyan] ({doc_count} docs)")
+    console.print(f"Extractor: [green]{extractor}[/green]")
+    if cats:
+        console.print(f"Filtered to categories: {sorted(cats)}")
+
+
 @convert_app.command("longmemeval")
 def convert_longmemeval(
     dataset_path: Path = typer.Option(
