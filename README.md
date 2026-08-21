@@ -169,6 +169,39 @@ Anti-leakage: raw conversations carry `containsEvidence`/`model_name` fields;
 rendered docs include neither and conversation ids are remapped to neutral
 positional ids.
 
+## Concurrent-write benchmark (basic-memory#1248)
+
+Measures correctness-under-concurrency rather than retrieval quality: N
+independent `bm mcp` client sessions create and edit notes in one shared
+Basic Memory project, with overlapping relation targets and shared hub notes
+that every writer appends to (the multi-agent shape from basic-memory#1213/#1214).
+
+```bash
+# Small-scale smoke (4 writers x 25 notes, strict convergence gate)
+just bench-write-smoke
+
+# Load shape, report-only (divergence is a valid benchmark result)
+just bench-write-load writers=8 notes=200
+
+# Direct invocation with a local BM checkout
+uv run bm-bench run concurrent-write \
+  --writers 4 --notes-per-writer 25 \
+  --bm-local-path /path/to/basic-memory
+```
+
+Per run (`benchmarks/runs/<run-id>/`): `manifest.json`, `per-op.jsonl`
+(latency + error per operation), `concurrent-write-summary.json`, `summary.md`.
+After the concurrent phase settles, the driver verifies convergence directly
+against the on-disk files and the run's isolated SQLite index: file/entity/row
+counts agree, no duplicate permalinks, no duplicate observation or relation
+tuples, and every observation line written by a reported-success op is present
+exactly once (unique `bmk-*` markers detect both lost and doubled writes).
+The run uses a fresh isolated home under `benchmarks/.bm-homes/`; environment
+variables such as `BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED` pass through, so axes
+like Redis on/off are controlled the same way as the retrieval scripts.
+Postgres row-integrity checks are a follow-up; the write workload itself is
+database-agnostic.
+
 ## Basic Memory source policy
 
 By default this project tracks Basic Memory from `main`.

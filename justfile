@@ -210,6 +210,21 @@ bench-run-full-judge model="gpt-4o-mini":
       --judge \
       --judge-model "{{model}}"
 
+# --- Concurrency benchmark (basic-memory#1248) ---
+
+# Small-scale smoke: 4 writers x 25 notes; strict so divergence fails the command
+bench-write-smoke:
+    uv run bm-bench run concurrent-write \
+      --writers 4 --notes-per-writer 25 \
+      {{bm_local_path_flag}} \
+      --strict
+
+# Load shape for the v0.22.1-vs-v0.23 comparison; report-only (divergence IS the result)
+bench-write-load writers="8" notes="200":
+    uv run bm-bench run concurrent-write \
+      --writers {{writers}} --notes-per-writer {{notes}} \
+      {{bm_local_path_flag}}
+
 # --- Artifacts and comparison ---
 
 bench-latest-run:

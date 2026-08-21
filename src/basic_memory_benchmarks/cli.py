@@ -19,6 +19,10 @@ from basic_memory_benchmarks.datasets.longmemeval import (
     LONGMEMEVAL_S_URL,
     fetch_longmemeval_dataset,
 )
+from basic_memory_benchmarks.concurrent_write import (
+    ConcurrentWriteConfig,
+    run_concurrent_write,
+)
 from basic_memory_benchmarks.models import DatasetProvenance, RunConfig
 from basic_memory_benchmarks.reporting.compare import (
     compare_provider_metric,
@@ -258,6 +262,66 @@ def run_retrieval_command(
 
     run_dir = run_retrieval(run_config=config, dataset=provenance)
     console.print(f"Retrieval run complete: [green]{run_dir}[/green]")
+
+
+@run_app.command("concurrent-write")
+def run_concurrent_write_command(
+    writers: int = typer.Option(4, "--writers", help="Concurrent MCP client sessions"),
+    notes_per_writer: int = typer.Option(25, "--notes-per-writer"),
+    edit_ratio: float = typer.Option(
+        0.4, "--edit-ratio", help="Per-note probability of hub/own-note append edits"
+    ),
+    hub_notes: int = typer.Option(4, "--hub-notes", help="Shared contended notes all writers edit"),
+    relation_pool: int = typer.Option(
+        8, "--relation-pool", help="Shared relation-target pool size"
+    ),
+    seed: int = typer.Option(42, "--seed"),
+    run_id: str | None = typer.Option(None, "--run-id"),
+    output_root: Path = typer.Option(Path("benchmarks/runs"), "--output-root"),
+    bm_source: str = typer.Option("github:basicmachines-co/basic-memory@main", "--bm-source"),
+    bm_local_path: str | None = typer.Option(None, "--bm-local-path"),
+    max_seconds: float | None = typer.Option(
+        None, "--max-seconds", help="Optional wall-clock cap for the concurrent phase"
+    ),
+    op_timeout: float = typer.Option(120.0, "--op-timeout"),
+    settle_timeout: float = typer.Option(180.0, "--settle-timeout"),
+    measure_reindex: bool = typer.Option(True, "--measure-reindex/--no-measure-reindex"),
+    strict: bool = typer.Option(
+        False,
+        "--strict/--no-strict",
+        help="Exit nonzero when convergence checks fail (divergence is a valid benchmark result, so default is report-only)",
+    ),
+) -> None:
+    """Concurrency benchmark: N MCP writers against one project (basic-memory#1248)."""
+    resolved_run_id = run_id or f"cw-{uuid.uuid4().hex[:12]}"
+    config = ConcurrentWriteConfig(
+        run_id=resolved_run_id,
+        writers=writers,
+        notes_per_writer=notes_per_writer,
+        edit_ratio=edit_ratio,
+        hub_notes=hub_notes,
+        relation_pool=relation_pool,
+        seed=seed,
+        output_root=str(output_root),
+        bm_source=bm_source,
+        bm_local_path=bm_local_path,
+        max_seconds=max_seconds,
+        op_timeout_seconds=op_timeout,
+        settle_timeout_seconds=settle_timeout,
+        measure_reindex=measure_reindex,
+    )
+    run_dir = run_concurrent_write(config)
+    console.print(f"Concurrent-write run complete: [green]{run_dir}[/green]")
+
+    if strict:
+        import json
+
+        summary = json.loads(
+            (run_dir / "concurrent-write-summary.json").read_text(encoding="utf-8")
+        )
+        if not summary["converged"]:
+            console.print("[red]Convergence checks failed (--strict)[/red]")
+            raise typer.Exit(code=1)
 
 
 @run_app.command("qa")
