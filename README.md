@@ -1,5 +1,8 @@
 # basic-memory-benchmarks
 
+NOTE: this repo is deprecated. Code ported to: https://github.com/basicmachines-co/basic-memory/tree/main/benchmarks
+
+
 Standalone, reproducible benchmark suite for comparing Basic Memory against competitor memory systems.
 
 ## Goals
